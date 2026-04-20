@@ -627,7 +627,7 @@ function renderBoard() {
   document.getElementById('totalCount').textContent = active + ' active · ' + total + ' total';
 
   // Score = queue×1 + sent×1.5 + contact×2 + meeting×3 (all cards)
-  const WEIGHTS = { queue: 1, sent: 1.5, contact: 2, meeting: 3 };
+  const WEIGHTS = { queue: -2, sent: 1.5, contact: 2, meeting: 3 };
   const score = COLUMNS.reduce((sum, col) => sum + pipelineState[col.id].length * WEIGHTS[col.id], 0);
   document.getElementById('pipelineScore').textContent = score % 1 === 0 ? score : score.toFixed(1);
 
