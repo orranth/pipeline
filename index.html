@@ -24,6 +24,7 @@
     --border-radius-md: 8px;
     --border-radius-lg: 12px;
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -41,6 +42,7 @@
       --color-border-secondary: rgba(255,255,255,0.3);
     }
   }
+  * { box-sizing: border-box; }
   body {
     font-family: var(--font-sans);
     background: var(--color-background-tertiary);
@@ -50,7 +52,7 @@
     min-height: 100vh;
     -webkit-tap-highlight-color: transparent;
   }
-  .container { max-width: 1100px; margin: 0 auto; }
+  .container { max-width: 1400px; margin: 0 auto; }
   button {
     font-family: var(--font-sans);
     background: transparent;
@@ -63,15 +65,28 @@
   }
   button:hover { background: var(--color-background-secondary); }
   button:active { transform: scale(0.98); }
+  input, textarea {
+    font-family: inherit;
+    color: inherit;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 10px;
+  }
+  textarea { resize: vertical; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 
-  /* Mobile: stack columns vertically */
-  @media (max-width: 768px) {
-    body { padding: 1rem 0.75rem; }
-    #board { grid-template-columns: 1fr !important; }
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 1rem; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .tab {
+    padding: 10px 16px; font-size: 14px; cursor: pointer;
+    border: none; background: transparent; color: var(--color-text-secondary);
+    border-bottom: 2px solid transparent; border-radius: 0;
   }
+  .tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: 500; }
+  .tab:hover { background: transparent; color: var(--color-text-primary); }
 
-  /* Status indicator */
+  /* Status */
   .status-dot {
     display: inline-block; width: 8px; height: 8px; border-radius: 50%;
     background: var(--color-text-tertiary); margin-right: 6px; vertical-align: middle;
@@ -80,20 +95,133 @@
   .status-dot.syncing { background: #EF9F27; animation: pulse 1s infinite; }
   .status-dot.error { background: #E24B4A; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Email workspace layout */
+  .email-workspace {
+    display: grid;
+    grid-template-columns: 280px 1fr 1fr;
+    gap: 12px;
+    height: calc(100vh - 180px);
+    min-height: 500px;
+  }
+  .panel {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 10px 12px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .panel-body {
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  .email-item {
+    padding: 10px 12px;
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    margin-bottom: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: border-color 0.15s;
+  }
+  .email-item:hover { border-color: var(--color-border-secondary); }
+  .email-item.selected { border-color: var(--color-text-info); background: var(--color-background-primary); }
+  .email-item .subject { font-weight: 500; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px; }
+  .email-item .from { font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .email-item .date { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+  .drop-zone {
+    border: 1.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .drop-zone:hover, .drop-zone.dragover { background: var(--color-background-tertiary); border-color: var(--color-text-info); color: var(--color-text-primary); }
+
+  .email-meta { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 12px; line-height: 1.6; }
+  .email-meta strong { color: var(--color-text-primary); font-weight: 500; margin-right: 4px; }
+  .email-body {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--color-text-primary);
+    font-family: var(--font-mono);
+  }
+  .email-body::selection { background: var(--color-background-tertiary); }
+
+  .editor-area {
+    display: flex; flex-direction: column; gap: 8px;
+    flex: 1; min-height: 0;
+  }
+  .editor-area textarea {
+    flex: 1; min-height: 200px; font-family: var(--font-mono);
+    font-size: 13px; line-height: 1.6;
+  }
+  .editor-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .empty-state { color: var(--color-text-tertiary); font-size: 13px; padding: 20px 12px; text-align: center; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--color-text-primary); color: var(--color-background-primary);
+    padding: 8px 16px; border-radius: var(--border-radius-md); font-size: 13px;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 0.9; }
+
+  /* Mobile */
+  @media (max-width: 900px) {
+    body { padding: 1rem 0.75rem; }
+    #board { grid-template-columns: 1fr !important; }
+    .email-workspace {
+      grid-template-columns: 1fr;
+      height: auto;
+    }
+    .panel { max-height: 70vh; }
+  }
 </style>
 </head>
 <body>
 <div class="container">
-<h2 class="sr-only">Cloud-synced sales pipeline Kanban board. Changes sync across devices in real time via Firestore.</h2>
+<h2 class="sr-only">Sales pipeline and email templates workspace, synced across devices.</h2>
 
-<div style="padding: 0.5rem 0;">
+<div class="tabs" role="tablist">
+  <button class="tab active" data-tab="pipeline" role="tab">Pipeline</button>
+  <button class="tab" data-tab="email" role="tab">Email templates</button>
+  <span style="margin-left: auto; font-size: 12px; color: var(--color-text-tertiary); align-self: center;">
+    <span id="statusDot" class="status-dot"></span><span id="statusText">Connecting…</span>
+  </span>
+</div>
+
+<!-- PIPELINE TAB -->
+<section id="tab-pipeline" class="tab-content">
   <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 12px; flex-wrap: wrap;">
     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
       <span style="font-size: 18px; font-weight: 500;">Pipeline</span>
       <span id="totalCount" style="font-size: 13px; color: var(--color-text-secondary);"></span>
-      <span style="font-size: 12px; color: var(--color-text-tertiary);">
-        <span id="statusDot" class="status-dot"></span><span id="statusText">Connecting…</span>
-      </span>
     </div>
     <div style="display: flex; gap: 8px;">
       <button id="seedBtn" style="font-size: 13px;">Load starter data</button>
@@ -103,7 +231,56 @@
 
   <div id="board" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;"></div>
   <p style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 12px;">Click text to edit · drag cards between columns · ✎ edit · ✓ done · ● color · × delete</p>
-</div>
+</section>
+
+<!-- EMAIL TAB -->
+<section id="tab-email" class="tab-content" style="display: none;">
+  <div class="email-workspace">
+    <!-- LEFT: Inbox -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Inbox <span id="emailCount" style="color: var(--color-text-tertiary); font-weight: 400; text-transform: none;"></span></span>
+      </div>
+      <div class="panel-body">
+        <div class="drop-zone" id="dropZone">
+          <div>Drop .eml files here<br>or click to upload</div>
+          <input type="file" id="fileInput" accept=".eml,.txt,message/rfc822" multiple style="display: none;">
+        </div>
+        <div id="emailList"></div>
+      </div>
+    </div>
+
+    <!-- MIDDLE: Viewer -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Viewer</span>
+        <button id="deleteEmailBtn" style="font-size: 12px; padding: 4px 10px; display: none;">Delete</button>
+      </div>
+      <div class="panel-body" id="emailViewer">
+        <div class="empty-state">Select an email from the inbox to view it here.</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Editor -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Editor</span>
+        <span style="font-size: 11px; color: var(--color-text-tertiary); font-weight: 400; text-transform: none;">Not synced</span>
+      </div>
+      <div class="panel-body editor-area">
+        <input type="text" id="editorSubject" placeholder="Subject…" style="font-size: 14px;">
+        <textarea id="editorBody" placeholder="Compose your email here. Select text in the viewer and click &quot;Copy selection to editor&quot; to pull snippets over."></textarea>
+        <div class="editor-toolbar">
+          <button id="copyFromViewerBtn" style="font-size: 12px;">Copy selection from viewer</button>
+          <button id="copyEditorBtn" style="font-size: 12px;">Copy all to clipboard</button>
+          <button id="clearEditorBtn" style="font-size: 12px;">Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
 </div>
 
 <script type="module">
@@ -126,7 +303,37 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const cardsRef = collection(db, "pipeline_cards");
+const emailsRef = collection(db, "email_templates");
 
+// ---- Shared status indicator ----
+function setStatus(kind, text) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot ' + kind;
+  txt.textContent = text;
+}
+
+function toast(message) {
+  const t = document.getElementById('toast');
+  t.textContent = message;
+  t.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ---- Tab switching ----
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    document.getElementById('tab-' + btn.dataset.tab).style.display = '';
+  });
+});
+
+// =====================================================
+// PIPELINE (unchanged from previous version)
+// =====================================================
 const COLUMNS = [
   { id: 'queue',    title: 'Queue',             color: 'var(--color-text-primary)' },
   { id: 'sent',     title: 'Sent',              color: 'var(--color-text-success)' },
@@ -163,24 +370,17 @@ const PALETTE = [
 ];
 const colorOf = (id) => PALETTE.find(p => p.id === id) || PALETTE[0];
 
-let state = { queue: [], sent: [], contact: [], meeting: [] };
+let pipelineState = { queue: [], sent: [], contact: [], meeting: [] };
 let dragData = null;
 let openColorPicker = null;
 let editingId = null;
-
-function setStatus(kind, text) {
-  const dot = document.getElementById('statusDot');
-  const txt = document.getElementById('statusText');
-  dot.className = 'status-dot ' + kind;
-  txt.textContent = text;
-}
 
 function newId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
 function findCard(cardId) {
   for (const col of COLUMNS) {
-    const idx = state[col.id].findIndex(c => c.id === cardId);
-    if (idx !== -1) return { col: col.id, idx, card: state[col.id][idx] };
+    const idx = pipelineState[col.id].findIndex(c => c.id === cardId);
+    if (idx !== -1) return { col: col.id, idx, card: pipelineState[col.id][idx] };
   }
   return null;
 }
@@ -208,41 +408,38 @@ async function deleteCardRemote(cardId) {
 async function moveCard(cardId, toCol) {
   const found = findCard(cardId);
   if (!found) return;
-  const card = { ...found.card, col: toCol, order: state[toCol].length };
+  const card = { ...found.card, col: toCol, order: pipelineState[toCol].length };
   await saveCard(card);
 }
 
-// Listen to all card changes in real time
 onSnapshot(query(cardsRef), (snapshot) => {
   const all = [];
   snapshot.forEach(docSnap => all.push({ id: docSnap.id, ...docSnap.data() }));
-  // Bucket by column
   const next = { queue: [], sent: [], contact: [], meeting: [] };
   for (const card of all) {
     const col = card.col && next[card.col] ? card.col : 'queue';
     next[col].push(card);
   }
-  // Sort each column by order
   for (const col of COLUMNS) {
     next[col.id].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
-  state = next;
+  pipelineState = next;
   setStatus('connected', 'Synced');
-  render();
+  renderBoard();
 }, (err) => {
   console.error('Snapshot error', err);
   setStatus('error', 'Connection error');
 });
 
-function render() {
+function renderBoard() {
   const board = document.getElementById('board');
   board.innerHTML = '';
   openColorPicker = null;
 
   let total = 0, active = 0;
   for (const col of COLUMNS) {
-    total += state[col.id].length;
-    active += state[col.id].filter(c => !c.done).length;
+    total += pipelineState[col.id].length;
+    active += pipelineState[col.id].filter(c => !c.done).length;
   }
   document.getElementById('totalCount').textContent = active + ' active · ' + total + ' total';
 
@@ -257,12 +454,12 @@ function render() {
     title.textContent = col.title;
     const count = document.createElement('span');
     count.style.cssText = 'font-size: 12px; color: var(--color-text-tertiary);';
-    count.textContent = state[col.id].length;
+    count.textContent = pipelineState[col.id].length;
     header.appendChild(title);
     header.appendChild(count);
     colEl.appendChild(header);
 
-    for (const card of state[col.id]) {
+    for (const card of pipelineState[col.id]) {
       colEl.appendChild(renderCard(card, col.id));
     }
 
@@ -271,11 +468,10 @@ function render() {
     addBtn.style.cssText = 'font-size: 12px; padding: 6px 10px; margin-top: auto; align-self: flex-start;';
     addBtn.addEventListener('click', async () => {
       const id = newId();
-      const card = { id, col: col.id, text: '', done: false, color: 'neutral', order: state[col.id].length };
+      const card = { id, col: col.id, text: '', done: false, color: 'neutral', order: pipelineState[col.id].length };
       editingId = id;
-      // Optimistic: add locally so the input appears immediately
-      state[col.id].push(card);
-      render();
+      pipelineState[col.id].push(card);
+      renderBoard();
       await saveCard(card);
     });
     colEl.appendChild(addBtn);
@@ -333,11 +529,8 @@ function renderCard(card, colId) {
     };
     const cancel = async () => {
       editingId = null;
-      if (!card.text) {
-        await deleteCardRemote(card.id);
-      } else {
-        render();
-      }
+      if (!card.text) { await deleteCardRemote(card.id); }
+      else { renderBoard(); }
     };
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); commit(); }
@@ -351,13 +544,13 @@ function renderCard(card, colId) {
     text.style.cssText = 'flex: 1; color: ' + colors.fg + '; cursor: text; min-width: 0; overflow: hidden; text-overflow: ellipsis;' + (card.done ? ' text-decoration: line-through; opacity: 0.5;' : '');
     text.textContent = card.text;
     text.title = 'Click to edit';
-    text.addEventListener('click', (e) => { e.stopPropagation(); editingId = card.id; render(); });
+    text.addEventListener('click', (e) => { e.stopPropagation(); editingId = card.id; renderBoard(); });
     el.appendChild(text);
 
     const actions = document.createElement('div');
     actions.style.cssText = 'display: flex; gap: 2px; align-items: center;';
 
-    const editBtn = miniBtn('✎', 'Edit', () => { editingId = card.id; render(); });
+    const editBtn = miniBtn('✎', 'Edit', () => { editingId = card.id; renderBoard(); });
     const doneBtn = miniBtn(card.done ? '↺' : '✓', card.done ? 'Mark active' : 'Mark done', async () => {
       card.done = !card.done;
       await saveCard(card);
@@ -432,10 +625,7 @@ document.getElementById('seedBtn').addEventListener('click', async () => {
       batch.set(doc(cardsRef, id), { id, ...item });
     }
     await batch.commit();
-  } catch (e) {
-    console.error(e);
-    setStatus('error', 'Failed to seed');
-  }
+  } catch (e) { console.error(e); setStatus('error', 'Failed to seed'); }
 });
 
 document.getElementById('clearBtn').addEventListener('click', async () => {
@@ -444,19 +634,282 @@ document.getElementById('clearBtn').addEventListener('click', async () => {
     setStatus('syncing', 'Clearing…');
     const batch = writeBatch(db);
     for (const col of COLUMNS) {
-      for (const c of state[col.id]) {
+      for (const c of pipelineState[col.id]) {
         batch.delete(doc(cardsRef, c.id));
       }
     }
     await batch.commit();
-  } catch (e) {
-    console.error(e);
-    setStatus('error', 'Clear failed');
+  } catch (e) { console.error(e); setStatus('error', 'Clear failed'); }
+});
+
+renderBoard();
+
+// =====================================================
+// EMAIL TEMPLATES
+// =====================================================
+
+let emails = [];
+let selectedEmailId = null;
+
+// Parse .eml file into structured data
+function parseEml(text) {
+  // Split headers from body at first blank line
+  const headerEnd = text.indexOf('\r\n\r\n') !== -1 ? text.indexOf('\r\n\r\n') : text.indexOf('\n\n');
+  let headerBlock = headerEnd === -1 ? text : text.slice(0, headerEnd);
+  let body = headerEnd === -1 ? '' : text.slice(headerEnd).replace(/^[\r\n]+/, '');
+
+  // Unfold header lines (RFC 5322: lines starting with whitespace continue the previous)
+  headerBlock = headerBlock.replace(/\r?\n[ \t]+/g, ' ');
+
+  const headers = {};
+  headerBlock.split(/\r?\n/).forEach(line => {
+    const m = line.match(/^([^:]+):\s*(.*)$/);
+    if (m) headers[m[1].toLowerCase()] = m[2];
+  });
+
+  // Handle multipart: try to grab the text/plain part
+  const contentType = (headers['content-type'] || '').toLowerCase();
+  if (contentType.includes('multipart/')) {
+    const boundaryMatch = contentType.match(/boundary="?([^";\s]+)"?/);
+    if (boundaryMatch) {
+      const boundary = '--' + boundaryMatch[1];
+      const parts = body.split(boundary);
+      let textPart = null;
+      let htmlPart = null;
+      for (const part of parts) {
+        const partHeaderEnd = part.indexOf('\r\n\r\n') !== -1 ? part.indexOf('\r\n\r\n') : part.indexOf('\n\n');
+        if (partHeaderEnd === -1) continue;
+        const partHeaders = part.slice(0, partHeaderEnd).toLowerCase();
+        const partBody = part.slice(partHeaderEnd).replace(/^[\r\n]+/, '').replace(/[\r\n]+--\s*$/, '');
+        if (partHeaders.includes('content-type: text/plain')) {
+          textPart = decodeBody(partBody, partHeaders);
+        } else if (partHeaders.includes('content-type: text/html') && !textPart) {
+          htmlPart = decodeBody(partBody, partHeaders);
+        }
+      }
+      if (textPart) body = textPart;
+      else if (htmlPart) body = stripHtml(htmlPart);
+    }
+  } else {
+    body = decodeBody(body, contentType);
+    if (contentType.includes('text/html')) body = stripHtml(body);
+  }
+
+  return {
+    subject: decodeHeader(headers['subject'] || '(no subject)'),
+    from: decodeHeader(headers['from'] || ''),
+    to: decodeHeader(headers['to'] || ''),
+    cc: decodeHeader(headers['cc'] || ''),
+    date: headers['date'] || '',
+    body: body.trim()
+  };
+}
+
+function decodeBody(body, contentTypeOrHeaders) {
+  const ct = contentTypeOrHeaders.toLowerCase();
+  if (ct.includes('quoted-printable') || /content-transfer-encoding:\s*quoted-printable/.test(ct)) {
+    return decodeQuotedPrintable(body);
+  }
+  if (ct.includes('base64') || /content-transfer-encoding:\s*base64/.test(ct)) {
+    try { return atob(body.replace(/\s/g, '')); } catch { return body; }
+  }
+  return body;
+}
+
+function decodeQuotedPrintable(s) {
+  return s
+    .replace(/=\r?\n/g, '')
+    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+function decodeHeader(s) {
+  // RFC 2047 encoded-word: =?charset?Q?text?= or =?charset?B?text?=
+  return s.replace(/=\?([^?]+)\?([QqBb])\?([^?]*)\?=/g, (_, charset, enc, text) => {
+    try {
+      if (enc.toUpperCase() === 'Q') {
+        return decodeQuotedPrintable(text.replace(/_/g, ' '));
+      } else {
+        return atob(text);
+      }
+    } catch { return text; }
+  });
+}
+
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function renderEmailList() {
+  const list = document.getElementById('emailList');
+  list.innerHTML = '';
+  document.getElementById('emailCount').textContent = emails.length ? `(${emails.length})` : '';
+  if (!emails.length) {
+    list.innerHTML = '<div class="empty-state" style="padding: 12px 4px;">No emails yet.<br>Drop .eml files above.</div>';
+    return;
+  }
+  const sorted = [...emails].sort((a, b) => {
+    const da = new Date(a.date || 0).getTime();
+    const dbb = new Date(b.date || 0).getTime();
+    return (dbb || 0) - (da || 0);
+  });
+  for (const email of sorted) {
+    const item = document.createElement('div');
+    item.className = 'email-item' + (email.id === selectedEmailId ? ' selected' : '');
+    item.innerHTML = `
+      <div class="subject"></div>
+      <div class="from"></div>
+      <div class="date"></div>
+    `;
+    item.querySelector('.subject').textContent = email.subject || '(no subject)';
+    item.querySelector('.from').textContent = email.from || '';
+    item.querySelector('.date').textContent = formatDate(email.date);
+    item.addEventListener('click', () => {
+      selectedEmailId = email.id;
+      renderEmailList();
+      renderEmailViewer();
+    });
+    list.appendChild(item);
+  }
+}
+
+function renderEmailViewer() {
+  const viewer = document.getElementById('emailViewer');
+  const deleteBtn = document.getElementById('deleteEmailBtn');
+  const email = emails.find(e => e.id === selectedEmailId);
+  if (!email) {
+    viewer.innerHTML = '<div class="empty-state">Select an email from the inbox to view it here.</div>';
+    deleteBtn.style.display = 'none';
+    return;
+  }
+  deleteBtn.style.display = '';
+
+  viewer.innerHTML = `
+    <div class="email-meta">
+      <div><strong>Subject:</strong><span class="s"></span></div>
+      <div><strong>From:</strong><span class="f"></span></div>
+      <div><strong>To:</strong><span class="t"></span></div>
+      ${email.cc ? '<div><strong>Cc:</strong><span class="c"></span></div>' : ''}
+      <div><strong>Date:</strong><span class="d"></span></div>
+    </div>
+    <div class="email-body"></div>
+  `;
+  viewer.querySelector('.s').textContent = ' ' + (email.subject || '');
+  viewer.querySelector('.f').textContent = ' ' + (email.from || '');
+  viewer.querySelector('.t').textContent = ' ' + (email.to || '');
+  if (email.cc) viewer.querySelector('.c').textContent = ' ' + email.cc;
+  viewer.querySelector('.d').textContent = ' ' + formatDate(email.date);
+  viewer.querySelector('.email-body').textContent = email.body || '';
+}
+
+// Listen to email changes
+onSnapshot(query(emailsRef), (snapshot) => {
+  const all = [];
+  snapshot.forEach(docSnap => all.push({ id: docSnap.id, ...docSnap.data() }));
+  emails = all;
+  renderEmailList();
+  renderEmailViewer();
+}, (err) => {
+  console.error('Email snapshot error', err);
+});
+
+// Upload handling
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList);
+  if (!files.length) return;
+  setStatus('syncing', `Uploading ${files.length} file${files.length > 1 ? 's' : ''}…`);
+  let ok = 0, fail = 0;
+  for (const file of files) {
+    try {
+      const text = await file.text();
+      const parsed = parseEml(text);
+      const id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      const record = { id, filename: file.name, ...parsed, uploadedAt: Date.now() };
+
+      // Check size — Firestore 1MB limit per doc
+      const size = new Blob([JSON.stringify(record)]).size;
+      if (size > 900000) {
+        // Truncate body if too big
+        const available = 900000 - size + (record.body || '').length;
+        record.body = (record.body || '').slice(0, Math.max(available, 10000)) + '\n\n[truncated — file too large for cloud storage]';
+      }
+
+      await setDoc(doc(emailsRef, id), record);
+      ok++;
+    } catch (e) {
+      console.error('Upload failed for', file.name, e);
+      fail++;
+    }
+  }
+  fileInput.value = ''; // reset
+  setStatus('connected', 'Synced');
+  if (fail) toast(`${ok} uploaded, ${fail} failed`);
+  else toast(`${ok} email${ok > 1 ? 's' : ''} uploaded`);
+}
+
+// Delete email
+document.getElementById('deleteEmailBtn').addEventListener('click', async () => {
+  if (!selectedEmailId) return;
+  if (!confirm('Delete this email?')) return;
+  try {
+    setStatus('syncing', 'Deleting…');
+    await deleteDoc(doc(emailsRef, selectedEmailId));
+    selectedEmailId = null;
+    setStatus('connected', 'Synced');
+  } catch (e) { console.error(e); setStatus('error', 'Delete failed'); }
+});
+
+// Editor actions
+document.getElementById('copyFromViewerBtn').addEventListener('click', () => {
+  const sel = window.getSelection().toString();
+  if (!sel) { toast('Select text in the viewer first'); return; }
+  const editor = document.getElementById('editorBody');
+  const cur = editor.value;
+  const start = editor.selectionStart ?? cur.length;
+  editor.value = cur.slice(0, start) + sel + cur.slice(start);
+  editor.focus();
+  toast('Copied to editor');
+});
+
+document.getElementById('copyEditorBtn').addEventListener('click', async () => {
+  const subject = document.getElementById('editorSubject').value;
+  const body = document.getElementById('editorBody').value;
+  const combined = (subject ? 'Subject: ' + subject + '\n\n' : '') + body;
+  try {
+    await navigator.clipboard.writeText(combined);
+    toast('Copied to clipboard');
+  } catch {
+    toast('Copy failed — try selecting manually');
   }
 });
 
-// Initial empty render
-render();
+document.getElementById('clearEditorBtn').addEventListener('click', () => {
+  if (!document.getElementById('editorBody').value && !document.getElementById('editorSubject').value) return;
+  if (!confirm('Clear the editor?')) return;
+  document.getElementById('editorSubject').value = '';
+  document.getElementById('editorBody').value = '';
+});
 </script>
 </body>
 </html>
