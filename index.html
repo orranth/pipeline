@@ -547,11 +547,27 @@ async function deleteCardRemote(cardId) {
   catch (e) { console.error('Delete failed', e); setStatus('error', 'Delete failed'); }
 }
 
-async function moveCard(cardId, toCol) {
+async function moveCard(cardId, toCol, toIndex) {
   const found = findCard(cardId);
   if (!found) return;
-  const card = { ...found.card, col: toCol, order: pipelineState[toCol].length };
-  await saveCard(card);
+  const srcCol = found.col;
+  // Remove from source
+  pipelineState[srcCol].splice(found.idx, 1);
+  found.card.col = toCol;
+  // Insert at target index
+  const dest = pipelineState[toCol];
+  const insertAt = (toIndex !== null && toIndex !== undefined) ? Math.min(toIndex, dest.length) : dest.length;
+  dest.splice(insertAt, 0, found.card);
+  // Reassign order for destination column
+  const batch = writeBatch(db);
+  dest.forEach((c, i) => { c.order = i; batch.set(doc(cardsRef, c.id), c); });
+  // If cross-column move, fix source order too
+  if (srcCol !== toCol) {
+    pipelineState[srcCol].forEach((c, i) => { c.order = i; batch.set(doc(cardsRef, c.id), c); });
+  }
+  setStatus('syncing', 'Saving…');
+  try { await batch.commit(); }
+  catch (e) { console.error('Move failed', e); setStatus('error', 'Move failed'); }
 }
 
 onSnapshot(query(cardsRef), (snapshot) => {
@@ -615,17 +631,60 @@ function renderBoard() {
     });
     colEl.appendChild(addBtn);
 
-    colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.style.background = 'var(--color-background-tertiary)'; });
-    colEl.addEventListener('dragleave', () => { colEl.style.background = 'var(--color-background-secondary)'; });
-    colEl.addEventListener('drop', (e) => { e.preventDefault(); colEl.style.background = 'var(--color-background-secondary)'; if (dragData) moveCard(dragData, col.id); });
+    colEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      colEl.style.background = 'var(--color-background-tertiary)';
+      // Highlight the card we're hovering over
+      colEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+      const afterEl = getDragAfterElement(colEl, e.clientY);
+      const indicator = document.createElement('div');
+      indicator.className = 'drop-indicator';
+      indicator.style.cssText = 'height: 2px; background: var(--color-text-info); border-radius: 2px; margin: 2px 0; pointer-events: none;';
+      if (afterEl) colEl.insertBefore(indicator, afterEl);
+      else colEl.insertBefore(indicator, colEl.querySelector('button:last-child'));
+    });
+    colEl.addEventListener('dragleave', (e) => {
+      if (!colEl.contains(e.relatedTarget)) {
+        colEl.style.background = 'var(--color-background-secondary)';
+        colEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+      }
+    });
+    colEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      colEl.style.background = 'var(--color-background-secondary)';
+      colEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+      if (!dragData) return;
+      const afterEl = getDragAfterElement(colEl, e.clientY);
+      let toIndex;
+      if (afterEl) {
+        const afterCardId = afterEl.querySelector('[data-card-id]')?.dataset.cardId;
+        toIndex = afterCardId ? pipelineState[col.id].findIndex(c => c.id === afterCardId) : pipelineState[col.id].length;
+        if (toIndex === -1) toIndex = pipelineState[col.id].length;
+      } else {
+        toIndex = pipelineState[col.id].length;
+      }
+      moveCard(dragData, col.id, toIndex);
+    });
     board.appendChild(colEl);
   }
+}
+
+function getDragAfterElement(container, y) {
+  const draggableEls = [...container.querySelectorAll('.card-wrap:not(.dragging)')];
+  return draggableEls.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
 function renderCard(card, colId) {
   const colors = colorOf(card.color);
   const emailStatus = EMAIL_STATUSES.find(s => s.id === (card.emailStatus || 'not-sent')) || EMAIL_STATUSES[0];
   const wrap = document.createElement('div');
+  wrap.className = 'card-wrap';
+  wrap.dataset.cardId = card.id;
   wrap.style.cssText = 'position: relative;';
 
   const el = document.createElement('div');
@@ -634,8 +693,8 @@ function renderCard(card, colId) {
   const isSelected = card.id === selectedCardId;
   el.style.cssText = 'background: var(--color-background-primary); border: ' + (isSelected ? '1.5px solid var(--color-text-info)' : '0.5px solid var(--color-border-tertiary)') + '; border-left: 3px solid ' + colors.swatch + '; border-radius: var(--border-radius-md); padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; font-size: 13px;';
 
-  el.addEventListener('dragstart', (e) => { if (editingId === card.id) { e.preventDefault(); return; } dragData = card.id; el.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; });
-  el.addEventListener('dragend', () => { el.style.opacity = '1'; dragData = null; });
+  el.addEventListener('dragstart', (e) => { if (editingId === card.id) { e.preventDefault(); return; } dragData = card.id; wrap.classList.add('dragging'); el.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; });
+  el.addEventListener('dragend', () => { wrap.classList.remove('dragging'); el.style.opacity = '1'; dragData = null; document.querySelectorAll('.drop-indicator').forEach(el => el.remove()); });
 
   if (editingId === card.id) {
     // Inline name editing mode
@@ -691,14 +750,16 @@ function renderCard(card, colId) {
     topRow.appendChild(actions);
     el.appendChild(topRow);
 
-    // Bottom row: email status badge + secondary info
+    // Bottom row: email status badge (queue/sent only) + secondary info
     const bottomRow = document.createElement('div');
     bottomRow.style.cssText = 'display: flex; align-items: center; gap: 6px;';
 
-    const badge = document.createElement('span');
-    badge.className = 'email-badge ' + emailStatus.badgeClass;
-    badge.textContent = emailStatus.label;
-    bottomRow.appendChild(badge);
+    if (colId === 'queue' || colId === 'sent') {
+      const badge = document.createElement('span');
+      badge.className = 'email-badge ' + emailStatus.badgeClass;
+      badge.textContent = emailStatus.label;
+      bottomRow.appendChild(badge);
+    }
 
     if (card.company) {
       const co = document.createElement('span');
