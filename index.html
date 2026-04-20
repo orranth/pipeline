@@ -379,10 +379,7 @@
       <span style="font-size: 18px; font-weight: 500;">Pipeline</span>
       <span id="totalCount" style="font-size: 13px; color: var(--color-text-secondary);"></span>
     </div>
-    <div style="display: flex; gap: 8px;">
-      <button id="seedBtn" style="font-size: 13px;">Load starter data</button>
-      <button id="clearBtn" style="font-size: 13px;">Clear all</button>
-    </div>
+
   </div>
 
   <div class="pipeline-layout">
@@ -425,25 +422,29 @@
     </div>
     <div class="panel">
       <div class="panel-header">
-        <span>Viewer</span>
+        <span>Sent viewer</span>
         <button id="deleteEmailBtn" style="font-size: 12px; padding: 4px 10px; display: none;">Delete</button>
       </div>
       <div class="panel-body" id="emailViewer">
-        <div class="empty-state">Select an email from the inbox to view it here.</div>
+        <div class="empty-state">Select an email from the Sent tab to view it here.</div>
       </div>
     </div>
     <div class="panel">
       <div class="panel-header">
-        <span>Editor</span>
-        <span style="font-size: 11px; color: var(--color-text-tertiary); font-weight: 400; text-transform: none;">Not synced</span>
+        <span>Drafts editor</span>
+        <span id="editorSaveInd" style="font-size: 11px; color: var(--color-text-tertiary); font-weight: 400; text-transform: none;"></span>
       </div>
-      <div class="panel-body editor-area">
-        <input type="text" id="editorSubject" placeholder="Subject…" style="font-size: 14px;">
-        <textarea id="editorBody" placeholder="Compose here. Select text in the viewer and click &quot;Copy selection from viewer&quot; to pull snippets over."></textarea>
-        <div class="editor-toolbar">
-          <button id="copyFromViewerBtn" style="font-size: 12px;">Copy selection from viewer</button>
-          <button id="copyEditorBtn" style="font-size: 12px;">Copy all to clipboard</button>
-          <button id="clearEditorBtn" style="font-size: 12px;">Clear</button>
+      <div class="panel-body" id="emailEditor" style="display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1;">
+        <div id="editorEmpty" class="empty-state">Select a draft from the Drafts tab to edit it here.</div>
+        <div id="editorForm" style="display: none; flex-direction: column; gap: 8px; flex: 1; min-height: 0;">
+          <div id="editorLockBanner" style="display:none;" class="viewer-locked">This email has been marked as sent and is locked for editing.</div>
+          <label style="font-size:12px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;">Subject (card title)</label>
+          <input type="text" id="editorSubject" placeholder="Subject…" style="font-size: 14px;">
+          <label style="font-size:12px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;">Email body</label>
+          <textarea id="editorBody" style="flex:1;min-height:200px;font-size:13px;line-height:1.6;" placeholder="Your email here…"></textarea>
+          <div class="editor-toolbar">
+            <button id="copyEditorBtn" style="font-size: 12px;">Copy all to clipboard</button>
+          </div>
         </div>
       </div>
     </div>
@@ -757,7 +758,6 @@ function renderCard(card, colId) {
     const actions = document.createElement('div');
     actions.style.cssText = 'display: flex; gap: 2px; align-items: center; flex-shrink: 0;';
 
-    const editBtn = miniBtn('✎', 'Rename', (e) => { e.stopPropagation(); editingId = card.id; renderBoard(); });
     const doneBtn = miniBtn(card.done ? '↺' : '✓', card.done ? 'Mark active' : 'Mark done', async (e) => { e.stopPropagation(); card.done = !card.done; await saveCard(card); });
     const colorBtn = document.createElement('button');
     colorBtn.title = 'Change color';
@@ -765,7 +765,6 @@ function renderCard(card, colId) {
     colorBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePicker(wrap, card); });
     const delBtn = miniBtn('×', 'Delete', async (e) => { e.stopPropagation(); if (selectedCardId === card.id) closeDetailPanel(); await deleteCardRemote(card.id); });
 
-    actions.appendChild(editBtn);
     actions.appendChild(doneBtn);
     actions.appendChild(colorBtn);
     actions.appendChild(delBtn);
@@ -1058,26 +1057,7 @@ function miniBtn(label, title, onClick) {
   return b;
 }
 
-document.getElementById('seedBtn').addEventListener('click', async () => {
-  if (!confirm('Load the original whiteboard contents? This will add them alongside any existing cards.')) return;
-  try {
-    setStatus('syncing', 'Loading starter data…');
-    const batch = writeBatch(db);
-    for (const item of STARTER_DATA) { const id = newId(); batch.set(doc(cardsRef, id), { id, ...item }); }
-    await batch.commit();
-  } catch (e) { console.error(e); setStatus('error', 'Failed to seed'); }
-});
 
-document.getElementById('clearBtn').addEventListener('click', async () => {
-  if (!confirm('Delete ALL cards from cloud? This cannot be undone.')) return;
-  try {
-    setStatus('syncing', 'Clearing…');
-    closeDetailPanel();
-    const batch = writeBatch(db);
-    for (const col of COLUMNS) for (const c of pipelineState[col.id]) batch.delete(doc(cardsRef, c.id));
-    await batch.commit();
-  } catch (e) { console.error(e); setStatus('error', 'Clear failed'); }
-});
 
 renderBoard();
 
@@ -1085,7 +1065,13 @@ renderBoard();
 // EMAIL TEMPLATES
 // =====================================================
 let emails = [];
-let selectedEmailId = null;
+let selectedSentId = null;   // tracks selection in Sent tab → Viewer
+let selectedDraftId = null;  // tracks selection in Drafts tab → Editor
+// legacy alias used by deleteEmailBtn and snapshot refresh
+Object.defineProperty(window, 'selectedEmailId', {
+  get() { return activeInboxSubtab === 'sent' ? selectedSentId : selectedDraftId; },
+  set(v) { if (activeInboxSubtab === 'sent') selectedSentId = v; else selectedDraftId = v; }
+});
 
 function splitHeadersBody(raw) {
   const match = raw.match(/\r?\n\r?\n/);
@@ -1231,7 +1217,8 @@ function renderEmailList() {
   for (const email of sorted) {
     const isPipeline = email.source === 'pipeline';
     const item=document.createElement('div');
-    item.className='email-item' + (isPipeline ? ' pipeline-source' : '') + (email.id===selectedEmailId?' selected':'');
+    const isSelected = activeInboxSubtab === 'sent' ? email.id === selectedSentId : email.id === selectedDraftId;
+    item.className='email-item' + (isPipeline ? ' pipeline-source' : '') + (isSelected ? ' selected' : '');
     const subj=document.createElement('div'); subj.className='esubject'; subj.textContent=email.subject||'(no subject)';
     const from=document.createElement('div'); from.className='efrom'; from.textContent=isPipeline ? 'From pipeline' : (email.from||'');
     const date=document.createElement('div'); date.className='edate'; date.textContent=formatDate(email.date);
@@ -1240,7 +1227,17 @@ function renderEmailList() {
       const tag=document.createElement('div'); tag.className='pipeline-tag'; tag.textContent='pipeline draft';
       item.appendChild(tag);
     }
-    item.addEventListener('click',()=>{ selectedEmailId=email.id; renderEmailList(); renderEmailViewer(); });
+    item.addEventListener('click',()=>{
+      if (activeInboxSubtab === 'sent') {
+        selectedSentId = email.id;
+        renderEmailList();
+        renderEmailViewer();
+      } else {
+        selectedDraftId = email.id;
+        renderEmailList();
+        renderEmailEditor();
+      }
+    });
     list.appendChild(item);
   }
 }
@@ -1249,9 +1246,9 @@ let viewerDebounceTimer = null;
 function renderEmailViewer() {
   const viewer = document.getElementById('emailViewer');
   const deleteBtn = document.getElementById('deleteEmailBtn');
-  const email = emails.find(e => e.id === selectedEmailId);
+  const email = emails.find(e => e.id === selectedSentId);
   if (!email) {
-    viewer.innerHTML = '<div class="empty-state">Select an email from the inbox to view it here.</div>';
+    viewer.innerHTML = '<div class="empty-state">Select an email from the Sent tab to view it here.</div>';
     deleteBtn.style.display = 'none';
     return;
   }
@@ -1270,62 +1267,7 @@ function renderEmailViewer() {
     viewer.appendChild(lock);
   }
 
-  if (isPipeline && !isSent) {
-    // Editable pipeline draft — two-way synced
-    const wrap = document.createElement('div');
-    wrap.className = 'viewer-editable';
-
-    const subjectLbl = document.createElement('label'); subjectLbl.textContent = 'Subject (card title)';
-    const subjectInput = document.createElement('input');
-    subjectInput.type = 'text';
-    subjectInput.value = email.subject || '';
-    subjectInput.placeholder = 'Subject…';
-
-    const bodyLbl = document.createElement('label'); bodyLbl.textContent = 'Email body';
-    const bodyArea = document.createElement('textarea');
-    bodyArea.value = email.body || '';
-    bodyArea.placeholder = 'Email body…';
-
-    const saveInd = document.createElement('div');
-    saveInd.style.cssText = 'font-size: 11px; color: var(--color-text-tertiary); text-align: right; min-height: 16px; margin-bottom: 6px;';
-
-    const syncBack = () => {
-      clearTimeout(viewerDebounceTimer);
-      saveInd.textContent = 'Unsaved…';
-      viewerDebounceTimer = setTimeout(async () => {
-        // Update the email template record
-        email.subject = subjectInput.value;
-        email.body = bodyArea.value;
-        // Sync back to the pipeline card
-        if (email.cardId) {
-          const found = findCard(email.cardId);
-          if (found) {
-            found.card.text = subjectInput.value;
-            found.card.emailText = bodyArea.value;
-            try { await saveCard(found.card); } catch(e) { console.error(e); }
-          }
-        }
-        try {
-          await setDoc(doc(emailsRef, email.id), email);
-          saveInd.textContent = 'Saved';
-          setTimeout(() => { saveInd.textContent = ''; }, 1500);
-        } catch(e) { console.error(e); saveInd.textContent = 'Save failed'; }
-      }, 800);
-    };
-
-    subjectInput.addEventListener('input', syncBack);
-    bodyArea.addEventListener('input', syncBack);
-
-    wrap.appendChild(subjectLbl);
-    wrap.appendChild(subjectInput);
-    wrap.appendChild(bodyLbl);
-    wrap.appendChild(bodyArea);
-    wrap.appendChild(saveInd);
-    viewer.appendChild(wrap);
-    return;
-  }
-
-  // Read-only view (uploaded emails or sent pipeline emails)
+  // Read-only view (sent emails)
   const meta = document.createElement('div'); meta.className = 'email-meta';
   const addMeta = (label, value) => {
     if (!value) return;
@@ -1341,17 +1283,80 @@ function renderEmailViewer() {
   body.textContent = email.body || '(empty body)';
   viewer.appendChild(meta); viewer.appendChild(body);
 }
-onSnapshot(query(emailsRef),(snapshot)=>{ const all=[]; snapshot.forEach(d=>all.push({id:d.id,...d.data()})); emails=all; renderEmailList(); renderEmailViewer(); },(err)=>console.error('Email snapshot error',err));
+function renderEmailEditor() {
+  const empty = document.getElementById('editorEmpty');
+  const form = document.getElementById('editorForm');
+  const lockBanner = document.getElementById('editorLockBanner');
+  const subjectInput = document.getElementById('editorSubject');
+  const bodyArea = document.getElementById('editorBody');
+  const saveInd = document.getElementById('editorSaveInd');
+
+  const email = emails.find(e => e.id === selectedDraftId);
+  if (!email) {
+    empty.style.display = '';
+    form.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  form.style.display = 'flex';
+
+  const isSent = email.emailStatus === 'sent';
+  lockBanner.style.display = isSent ? '' : 'none';
+  subjectInput.disabled = isSent;
+  bodyArea.disabled = isSent;
+  subjectInput.style.opacity = isSent ? '0.5' : '1';
+  bodyArea.style.opacity = isSent ? '0.5' : '1';
+
+  // Populate without triggering input handlers
+  subjectInput.value = email.subject || '';
+  bodyArea.value = email.body || '';
+
+  // Remove old listeners by replacing elements in place
+  const newSubject = subjectInput.cloneNode(true);
+  const newBody = bodyArea.cloneNode(true);
+  subjectInput.parentNode.replaceChild(newSubject, subjectInput);
+  bodyArea.parentNode.replaceChild(newBody, bodyArea);
+
+  if (!isSent) {
+    const syncBack = () => {
+      clearTimeout(viewerDebounceTimer);
+      saveInd.textContent = 'Unsaved…';
+      viewerDebounceTimer = setTimeout(async () => {
+        email.subject = newSubject.value;
+        email.body = newBody.value;
+        // Sync back to linked pipeline card
+        if (email.cardId) {
+          const found = findCard(email.cardId);
+          if (found) {
+            found.card.text = newSubject.value;
+            found.card.emailText = newBody.value;
+            try { await saveCard(found.card); } catch(e) { console.error(e); }
+          }
+        }
+        try {
+          await setDoc(doc(emailsRef, email.id), email);
+          saveInd.textContent = 'Saved';
+          setTimeout(() => { saveInd.textContent = ''; }, 1500);
+        } catch(e) { console.error(e); saveInd.textContent = 'Save failed'; }
+      }, 800);
+    };
+    newSubject.addEventListener('input', syncBack);
+    newBody.addEventListener('input', syncBack);
+  }
+}
+
+onSnapshot(query(emailsRef),(snapshot)=>{ const all=[]; snapshot.forEach(d=>all.push({id:d.id,...d.data()})); emails=all; renderEmailList(); renderEmailViewer(); renderEmailEditor(); },(err)=>console.error('Email snapshot error',err));
 
 document.querySelectorAll('.inbox-subtab').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.inbox-subtab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     activeInboxSubtab = btn.dataset.subtab;
-    selectedEmailId = null;
     document.getElementById('newDraftBtn').style.display = activeInboxSubtab === 'drafts' ? '' : 'none';
     renderEmailList();
     renderEmailViewer();
+    renderEmailEditor();
   });
 });
 
@@ -1441,9 +1446,11 @@ document.getElementById('newDraftBtn').addEventListener('click', () => {
       setStatus('syncing', 'Creating draft…');
       await setDoc(doc(emailsRef, id), record);
       setStatus('connected', 'Synced');
-      selectedEmailId = id;
+      selectedDraftId = id;
       overlay.remove();
       toast('Draft created');
+      renderEmailList();
+      renderEmailEditor();
     } catch(e) {
       console.error(e);
       setStatus('error', 'Create failed');
@@ -1498,27 +1505,17 @@ document.getElementById('deleteEmailBtn').addEventListener('click',async()=>{
   catch(e) { console.error(e); setStatus('error','Delete failed'); }
 });
 
-document.getElementById('copyFromViewerBtn').addEventListener('click',()=>{
-  const sel=window.getSelection().toString();
-  if (!sel) { toast('Select text in the viewer first'); return; }
-  const editor=document.getElementById('editorBody');
-  const cur=editor.value; const start=editor.selectionStart??cur.length;
-  editor.value=cur.slice(0,start)+sel+cur.slice(start);
-  editor.focus(); toast('Copied to editor');
-});
+// copyFromViewerBtn removed — editor now directly edits draft
 document.getElementById('copyEditorBtn').addEventListener('click',async()=>{
-  const subject=document.getElementById('editorSubject').value;
-  const body=document.getElementById('editorBody').value;
+  const subjectEl = document.getElementById('editorSubject');
+  const bodyEl = document.getElementById('editorBody');
+  const subject = subjectEl ? subjectEl.value : '';
+  const body = bodyEl ? bodyEl.value : '';
   const combined=(subject?'Subject: '+subject+'\n\n':'')+body;
   try { await navigator.clipboard.writeText(combined); toast('Copied to clipboard'); }
   catch { toast('Copy failed — try selecting manually'); }
 });
-document.getElementById('clearEditorBtn').addEventListener('click',()=>{
-  if (!document.getElementById('editorBody').value&&!document.getElementById('editorSubject').value) return;
-  if (!confirm('Clear the editor?')) return;
-  document.getElementById('editorSubject').value='';
-  document.getElementById('editorBody').value='';
-});
+// clearEditorBtn removed
 </script>
 </body>
 </html>
