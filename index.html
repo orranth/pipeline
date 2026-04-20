@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WPO INTERNSHIP PIPELINE</title>
+<title>Sales Pipeline</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Pipeline">
@@ -25,6 +25,7 @@
     --border-radius-lg: 12px;
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+    --panel-width: 320px;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -65,17 +66,33 @@
   }
   button:hover { background: var(--color-background-secondary); }
   button:active { transform: scale(0.98); }
-  input, textarea {
+  input, textarea, select {
     font-family: inherit;
     color: inherit;
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: var(--border-radius-md);
     padding: 8px 10px;
+    width: 100%;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--color-border-secondary);
   }
   textarea { resize: vertical; }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .field { margin-bottom: 14px; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 
+  /* Tabs */
   .tabs { display: flex; gap: 4px; margin-bottom: 1rem; border-bottom: 0.5px solid var(--color-border-tertiary); }
   .tab {
     padding: 10px 16px; font-size: 14px; cursor: pointer;
@@ -85,6 +102,7 @@
   .tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: 500; }
   .tab:hover { background: transparent; color: var(--color-text-primary); }
 
+  /* Status dot */
   .status-dot {
     display: inline-block; width: 8px; height: 8px; border-radius: 50%;
     background: var(--color-text-tertiary); margin-right: 6px; vertical-align: middle;
@@ -94,6 +112,151 @@
   .status-dot.error { background: #E24B4A; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
+  /* Pipeline layout — board + detail panel side by side */
+  .pipeline-layout {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    transition: all 0.25s ease;
+  }
+  .board-area {
+    flex: 1;
+    min-width: 0;
+    transition: all 0.25s ease;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  /* Detail panel */
+  .detail-panel {
+    width: var(--panel-width);
+    flex-shrink: 0;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    max-height: calc(100vh - 160px);
+    position: sticky;
+    top: 1.5rem;
+  }
+  .detail-panel.open { display: flex; }
+  .detail-panel-header {
+    padding: 12px 14px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .detail-panel-header span {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .detail-panel-body {
+    padding: 16px 14px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  .close-btn {
+    border: none;
+    padding: 4px 8px;
+    font-size: 16px;
+    color: var(--color-text-tertiary);
+    line-height: 1;
+  }
+  .close-btn:hover { color: var(--color-text-primary); background: var(--color-background-secondary); }
+
+  /* Email status toggle */
+  .email-status-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .email-status-btn {
+    flex: 1;
+    padding: 7px 6px;
+    font-size: 12px;
+    text-align: center;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    min-width: 70px;
+  }
+  .email-status-btn.active-not-sent {
+    background: var(--color-background-secondary);
+    border-color: var(--color-text-secondary);
+    color: var(--color-text-secondary);
+    font-weight: 500;
+  }
+  .email-status-btn.active-drafting {
+    background: #FAEEDA;
+    border-color: #BA7517;
+    color: #854F0B;
+    font-weight: 500;
+  }
+  .email-status-btn.active-sent {
+    background: #E1F5EE;
+    border-color: #1D9E75;
+    color: #0F6E56;
+    font-weight: 500;
+  }
+
+  /* Badge on card */
+  .email-badge {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .badge-not-sent { background: var(--color-background-secondary); color: var(--color-text-tertiary); }
+  .badge-drafting { background: #FAEEDA; color: #854F0B; }
+  .badge-sent { background: #E1F5EE; color: #0F6E56; }
+
+  /* Card detail overlay hint */
+  .card-el { position: relative; }
+  .card-el:hover .card-expand-hint { opacity: 1; }
+  .card-expand-hint {
+    position: absolute;
+    right: 6px; top: 50%; transform: translateY(-50%);
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
+
+  /* Save indicator */
+  .save-indicator {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    text-align: right;
+    min-height: 16px;
+    margin-top: -10px;
+    margin-bottom: 6px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--color-text-primary); color: var(--color-background-primary);
+    padding: 8px 16px; border-radius: var(--border-radius-md); font-size: 13px;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 0.9; }
+
+  /* Email workspace */
   .email-workspace {
     display: grid;
     grid-template-columns: 260px 1fr 1fr;
@@ -142,10 +305,9 @@
   }
   .email-item:hover { border-color: var(--color-border-secondary); }
   .email-item.selected { border-color: var(--color-text-info); }
-  .email-item .subject { font-weight: 500; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px; }
-  .email-item .from { font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .email-item .date { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
-
+  .email-item .esubject { font-weight: 500; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px; }
+  .email-item .efrom { font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .email-item .edate { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
   .drop-zone {
     border: 1.5px dashed var(--color-border-secondary);
     border-radius: var(--border-radius-md);
@@ -158,39 +320,24 @@
     transition: all 0.15s;
   }
   .drop-zone:hover, .drop-zone.dragover { background: var(--color-background-tertiary); border-color: var(--color-text-info); color: var(--color-text-primary); }
-
   .email-meta { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 12px; line-height: 1.6; padding-bottom: 10px; border-bottom: 0.5px solid var(--color-border-tertiary); }
   .email-meta strong { color: var(--color-text-primary); font-weight: 500; margin-right: 4px; }
-  .email-body {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow-wrap: anywhere;
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--color-text-primary);
-  }
-
+  .email-body { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; color: var(--color-text-primary); }
   .editor-area { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
   .editor-area textarea { flex: 1; min-height: 200px; font-size: 13px; line-height: 1.6; }
   .editor-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
-
   .empty-state { color: var(--color-text-tertiary); font-size: 13px; padding: 20px 12px; text-align: center; }
 
-  .toast {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: var(--color-text-primary); color: var(--color-background-primary);
-    padding: 8px 16px; border-radius: var(--border-radius-md); font-size: 13px;
-    opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100;
-  }
-  .toast.show { opacity: 0.9; }
-
   @media (max-width: 1100px) {
+    #board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .email-workspace { grid-template-columns: 220px 1fr; grid-template-rows: 1fr 1fr; }
     .email-workspace .panel:first-child { grid-row: 1 / 3; }
   }
   @media (max-width: 768px) {
     body { padding: 1rem 0.75rem; }
     #board { grid-template-columns: 1fr !important; }
+    .pipeline-layout { flex-direction: column; }
+    .detail-panel { width: 100%; position: static; max-height: none; }
     .email-workspace { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
     .email-workspace .panel:first-child { grid-row: auto; }
     .panel { max-height: 60vh; }
@@ -199,7 +346,6 @@
 </head>
 <body>
 <div class="container">
-<h2 class="sr-only">Sales pipeline and email templates workspace, synced across devices.</h2>
 
 <div class="tabs" role="tablist">
   <button class="tab active" data-tab="pipeline" role="tab">Pipeline</button>
@@ -209,9 +355,10 @@
   </span>
 </div>
 
+<!-- PIPELINE TAB -->
 <section id="tab-pipeline" class="tab-content">
   <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 12px; flex-wrap: wrap;">
-    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 12px;">
       <span style="font-size: 18px; font-weight: 500;">Pipeline</span>
       <span id="totalCount" style="font-size: 13px; color: var(--color-text-secondary);"></span>
     </div>
@@ -220,10 +367,26 @@
       <button id="clearBtn" style="font-size: 13px;">Clear all</button>
     </div>
   </div>
-  <div id="board" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;"></div>
-  <p style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 12px;">Click text to edit · drag cards between columns · ✎ edit · ✓ done · ● color · × delete</p>
+
+  <div class="pipeline-layout">
+    <div class="board-area">
+      <div id="board"></div>
+      <p style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 12px;">Click a card to view details · drag between columns · ✎ rename · ✓ done · ● color · × delete</p>
+    </div>
+
+    <!-- Detail panel -->
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-panel-header">
+        <span>Details</span>
+        <button class="close-btn" id="closeDetail" title="Close">×</button>
+      </div>
+      <div class="detail-panel-body" id="detailBody">
+      </div>
+    </div>
+  </div>
 </section>
 
+<!-- EMAIL TAB -->
 <section id="tab-email" class="tab-content" style="display: none;">
   <div class="email-workspace">
     <div class="panel">
@@ -233,12 +396,11 @@
       <div class="panel-body">
         <div class="drop-zone" id="dropZone">
           <div>Drop .eml files here<br>or click to upload</div>
-          <input type="file" id="fileInput" accept=".eml,.txt,message/rfc822" multiple style="display: none;">
+          <input type="file" id="fileInput" accept=".eml,.txt,message/rfc822" multiple style="display: none; width: auto;">
         </div>
         <div id="emailList"></div>
       </div>
     </div>
-
     <div class="panel">
       <div class="panel-header">
         <span>Viewer</span>
@@ -248,7 +410,6 @@
         <div class="empty-state">Select an email from the inbox to view it here.</div>
       </div>
     </div>
-
     <div class="panel">
       <div class="panel-header">
         <span>Editor</span>
@@ -296,7 +457,6 @@ function setStatus(kind, text) {
   document.getElementById('statusDot').className = 'status-dot ' + kind;
   document.getElementById('statusText').textContent = text;
 }
-
 function toast(message) {
   const t = document.getElementById('toast');
   t.textContent = message;
@@ -305,6 +465,7 @@ function toast(message) {
   toast._timer = setTimeout(() => t.classList.remove('show'), 1800);
 }
 
+// Tabs
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
@@ -315,7 +476,7 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 
 // =====================================================
-// PIPELINE (unchanged)
+// PIPELINE
 // =====================================================
 const COLUMNS = [
   { id: 'queue',    title: 'Queue',             color: 'var(--color-text-primary)' },
@@ -353,10 +514,18 @@ const PALETTE = [
 ];
 const colorOf = (id) => PALETTE.find(p => p.id === id) || PALETTE[0];
 
+const EMAIL_STATUSES = [
+  { id: 'not-sent',  label: 'Not sent',  activeClass: 'active-not-sent',  badgeClass: 'badge-not-sent' },
+  { id: 'drafting',  label: 'Drafting',  activeClass: 'active-drafting',  badgeClass: 'badge-drafting' },
+  { id: 'sent',      label: 'Sent',      activeClass: 'active-sent',      badgeClass: 'badge-sent' }
+];
+
 let pipelineState = { queue: [], sent: [], contact: [], meeting: [] };
 let dragData = null;
 let openColorPicker = null;
 let editingId = null;
+let selectedCardId = null;
+let saveDebounceTimer = null;
 
 function newId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -397,6 +566,11 @@ onSnapshot(query(cardsRef), (snapshot) => {
   pipelineState = next;
   setStatus('connected', 'Synced');
   renderBoard();
+  // If a card is selected, refresh the panel with latest data
+  if (selectedCardId) {
+    const found = findCard(selectedCardId);
+    if (found) renderDetailPanel(found.card);
+  }
 }, (err) => { console.error('Snapshot error', err); setStatus('error', 'Connection error'); });
 
 function renderBoard() {
@@ -423,8 +597,7 @@ function renderBoard() {
     const count = document.createElement('span');
     count.style.cssText = 'font-size: 12px; color: var(--color-text-tertiary);';
     count.textContent = pipelineState[col.id].length;
-    header.appendChild(title);
-    header.appendChild(count);
+    header.appendChild(title); header.appendChild(count);
     colEl.appendChild(header);
 
     for (const card of pipelineState[col.id]) colEl.appendChild(renderCard(card, col.id));
@@ -445,29 +618,32 @@ function renderBoard() {
     colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.style.background = 'var(--color-background-tertiary)'; });
     colEl.addEventListener('dragleave', () => { colEl.style.background = 'var(--color-background-secondary)'; });
     colEl.addEventListener('drop', (e) => { e.preventDefault(); colEl.style.background = 'var(--color-background-secondary)'; if (dragData) moveCard(dragData, col.id); });
-
     board.appendChild(colEl);
   }
 }
 
 function renderCard(card, colId) {
   const colors = colorOf(card.color);
+  const emailStatus = EMAIL_STATUSES.find(s => s.id === (card.emailStatus || 'not-sent')) || EMAIL_STATUSES[0];
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position: relative;';
 
   const el = document.createElement('div');
+  el.className = 'card-el';
   el.draggable = (editingId !== card.id);
-  el.style.cssText = 'background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-left: 3px solid ' + colors.swatch + '; border-radius: var(--border-radius-md); padding: 8px 10px; cursor: grab; display: flex; align-items: center; gap: 8px; font-size: 13px;';
+  const isSelected = card.id === selectedCardId;
+  el.style.cssText = 'background: var(--color-background-primary); border: ' + (isSelected ? '1.5px solid var(--color-text-info)' : '0.5px solid var(--color-border-tertiary)') + '; border-left: 3px solid ' + colors.swatch + '; border-radius: var(--border-radius-md); padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; font-size: 13px;';
 
   el.addEventListener('dragstart', (e) => { if (editingId === card.id) { e.preventDefault(); return; } dragData = card.id; el.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; });
   el.addEventListener('dragend', () => { el.style.opacity = '1'; dragData = null; });
 
   if (editingId === card.id) {
+    // Inline name editing mode
     const input = document.createElement('input');
     input.type = 'text';
     input.value = card.text;
-    input.placeholder = 'Type and press Enter…';
-    input.style.cssText = 'flex: 1; font: inherit; color: ' + colors.fg + '; background: transparent; border: none; outline: none; padding: 0; min-width: 0;';
+    input.placeholder = 'Title…';
+    input.style.cssText = 'font: inherit; color: ' + colors.fg + '; background: transparent; border: none; outline: none; padding: 0; width: 100%;';
     input.addEventListener('click', e => e.stopPropagation());
     const commit = async () => {
       const v = input.value.trim();
@@ -488,32 +664,209 @@ function renderCard(card, colId) {
     el.appendChild(input);
     setTimeout(() => { input.focus(); input.select(); }, 0);
   } else {
+    // Top row: text + action icons
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+
     const text = document.createElement('span');
-    text.style.cssText = 'flex: 1; color: ' + colors.fg + '; cursor: text; min-width: 0; overflow: hidden; text-overflow: ellipsis;' + (card.done ? ' text-decoration: line-through; opacity: 0.5;' : '');
-    text.textContent = card.text;
-    text.title = 'Click to edit';
-    text.addEventListener('click', (e) => { e.stopPropagation(); editingId = card.id; renderBoard(); });
-    el.appendChild(text);
+    text.style.cssText = 'flex: 1; color: ' + colors.fg + '; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;' + (card.done ? ' text-decoration: line-through; opacity: 0.5;' : '');
+    text.textContent = card.text || '(untitled)';
+    topRow.appendChild(text);
 
     const actions = document.createElement('div');
-    actions.style.cssText = 'display: flex; gap: 2px; align-items: center;';
-    const editBtn = miniBtn('✎', 'Edit', () => { editingId = card.id; renderBoard(); });
-    const doneBtn = miniBtn(card.done ? '↺' : '✓', card.done ? 'Mark active' : 'Mark done', async () => { card.done = !card.done; await saveCard(card); });
+    actions.style.cssText = 'display: flex; gap: 2px; align-items: center; flex-shrink: 0;';
+
+    const editBtn = miniBtn('✎', 'Rename', (e) => { e.stopPropagation(); editingId = card.id; renderBoard(); });
+    const doneBtn = miniBtn(card.done ? '↺' : '✓', card.done ? 'Mark active' : 'Mark done', async (e) => { e.stopPropagation(); card.done = !card.done; await saveCard(card); });
     const colorBtn = document.createElement('button');
     colorBtn.title = 'Change color';
-    colorBtn.style.cssText = 'background: ' + colors.swatch + '; border: 1px solid var(--color-border-tertiary); width: 14px; height: 14px; padding: 0; border-radius: 50%; cursor: pointer;';
+    colorBtn.style.cssText = 'background: ' + colors.swatch + '; border: 1px solid var(--color-border-tertiary); width: 14px; height: 14px; padding: 0; border-radius: 50%; cursor: pointer; flex-shrink: 0;';
     colorBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePicker(wrap, card); });
-    const delBtn = miniBtn('×', 'Delete', async () => { await deleteCardRemote(card.id); });
+    const delBtn = miniBtn('×', 'Delete', async (e) => { e.stopPropagation(); if (selectedCardId === card.id) closeDetailPanel(); await deleteCardRemote(card.id); });
+
     actions.appendChild(editBtn);
     actions.appendChild(doneBtn);
     actions.appendChild(colorBtn);
     actions.appendChild(delBtn);
-    el.appendChild(actions);
+    topRow.appendChild(actions);
+    el.appendChild(topRow);
+
+    // Bottom row: email status badge + secondary info
+    const bottomRow = document.createElement('div');
+    bottomRow.style.cssText = 'display: flex; align-items: center; gap: 6px;';
+
+    const badge = document.createElement('span');
+    badge.className = 'email-badge ' + emailStatus.badgeClass;
+    badge.textContent = emailStatus.label;
+    bottomRow.appendChild(badge);
+
+    if (card.company) {
+      const co = document.createElement('span');
+      co.style.cssText = 'font-size: 11px; color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;';
+      co.textContent = card.company;
+      bottomRow.appendChild(co);
+    }
+
+    el.appendChild(bottomRow);
+
+    // Click card body to open detail panel
+    el.addEventListener('click', () => {
+      if (selectedCardId === card.id) { closeDetailPanel(); return; }
+      selectedCardId = card.id;
+      renderBoard();
+      renderDetailPanel(card);
+    });
   }
 
   wrap.appendChild(el);
   return wrap;
 }
+
+function renderDetailPanel(card) {
+  const panel = document.getElementById('detailPanel');
+  const body = document.getElementById('detailBody');
+  panel.classList.add('open');
+
+  const emailStatus = card.emailStatus || 'not-sent';
+
+  body.innerHTML = '';
+
+  // Helper to create a debounced save on field change
+  const debouncedSave = () => {
+    clearTimeout(saveDebounceTimer);
+    const indicator = body.querySelector('.save-indicator');
+    if (indicator) indicator.textContent = 'Unsaved…';
+    saveDebounceTimer = setTimeout(async () => {
+      const found = findCard(card.id);
+      if (!found) return;
+      await saveCard(found.card);
+      if (indicator) indicator.textContent = 'Saved';
+      setTimeout(() => { if (indicator) indicator.textContent = ''; }, 1500);
+    }, 800);
+  };
+
+  const makeField = (labelText, inputEl) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'field';
+    const lbl = document.createElement('label');
+    lbl.textContent = labelText;
+    wrap.appendChild(lbl);
+    wrap.appendChild(inputEl);
+    return wrap;
+  };
+
+  // Title
+  const titleInput = document.createElement('input');
+  titleInput.type = 'text';
+  titleInput.value = card.text || '';
+  titleInput.placeholder = 'e.g. Jason Rose';
+  titleInput.addEventListener('input', () => {
+    const found = findCard(card.id);
+    if (found) found.card.text = titleInput.value;
+    debouncedSave();
+  });
+  body.appendChild(makeField('Title (shown on board)', titleInput));
+
+  // Name
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.value = card.name || '';
+  nameInput.placeholder = 'Full name';
+  nameInput.addEventListener('input', () => {
+    const found = findCard(card.id);
+    if (found) found.card.name = nameInput.value;
+    debouncedSave();
+  });
+  body.appendChild(makeField('Name', nameInput));
+
+  // Company
+  const companyInput = document.createElement('input');
+  companyInput.type = 'text';
+  companyInput.value = card.company || '';
+  companyInput.placeholder = 'Company';
+  companyInput.addEventListener('input', () => {
+    const found = findCard(card.id);
+    if (found) found.card.company = companyInput.value;
+    debouncedSave();
+  });
+  body.appendChild(makeField('Company', companyInput));
+
+  // Save indicator
+  const saveInd = document.createElement('div');
+  saveInd.className = 'save-indicator';
+  body.appendChild(saveInd);
+
+  // Notes
+  const notesInput = document.createElement('textarea');
+  notesInput.style.minHeight = '100px';
+  notesInput.value = card.notes || '';
+  notesInput.placeholder = 'Notes…';
+  notesInput.addEventListener('input', () => {
+    const found = findCard(card.id);
+    if (found) found.card.notes = notesInput.value;
+    debouncedSave();
+  });
+  body.appendChild(makeField('Notes', notesInput));
+
+  // Email status toggle
+  const emailField = document.createElement('div');
+  emailField.className = 'field';
+  const emailLbl = document.createElement('label');
+  emailLbl.textContent = 'Initial email';
+  emailField.appendChild(emailLbl);
+
+  const statusGroup = document.createElement('div');
+  statusGroup.className = 'email-status-group';
+
+  EMAIL_STATUSES.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'email-status-btn';
+    btn.textContent = s.label;
+    if ((card.emailStatus || 'not-sent') === s.id) btn.classList.add(s.activeClass);
+    btn.style.border = '0.5px solid var(--color-border-secondary)';
+    btn.addEventListener('click', async () => {
+      const found = findCard(card.id);
+      if (!found) return;
+      found.card.emailStatus = s.id;
+      await saveCard(found.card);
+      // Re-render panel and board
+      renderDetailPanel(found.card);
+    });
+    statusGroup.appendChild(btn);
+  });
+  emailField.appendChild(statusGroup);
+  body.appendChild(emailField);
+
+  // Initial email text
+  const emailTextField = document.createElement('div');
+  emailTextField.className = 'field';
+  const emailTextLbl = document.createElement('label');
+  emailTextLbl.textContent = 'Email draft / notes';
+  emailTextField.appendChild(emailTextLbl);
+  const emailTextArea = document.createElement('textarea');
+  emailTextArea.style.minHeight = '120px';
+  emailTextArea.value = card.emailText || '';
+  emailTextArea.placeholder = 'Draft your outreach email here…';
+  emailTextArea.addEventListener('input', () => {
+    const found = findCard(card.id);
+    if (found) found.card.emailText = emailTextArea.value;
+    debouncedSave();
+  });
+  emailTextField.appendChild(emailTextArea);
+  body.appendChild(emailTextField);
+}
+
+function closeDetailPanel() {
+  selectedCardId = null;
+  document.getElementById('detailPanel').classList.remove('open');
+  renderBoard();
+}
+
+document.getElementById('closeDetail').addEventListener('click', closeDetailPanel);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && selectedCardId) closeDetailPanel();
+});
 
 function togglePicker(wrap, card) {
   const existing = wrap.querySelector('.color-picker');
@@ -543,7 +896,7 @@ function miniBtn(label, title, onClick) {
   b.style.cssText = 'background: transparent; border: none; padding: 2px 6px; font-size: 13px; cursor: pointer; line-height: 1; color: var(--color-text-secondary); border-radius: var(--border-radius-md);';
   b.addEventListener('mouseenter', () => b.style.background = 'var(--color-background-secondary)');
   b.addEventListener('mouseleave', () => b.style.background = 'transparent');
-  b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+  b.addEventListener('click', (e) => { e.stopPropagation(); onClick(e); });
   return b;
 }
 
@@ -552,10 +905,7 @@ document.getElementById('seedBtn').addEventListener('click', async () => {
   try {
     setStatus('syncing', 'Loading starter data…');
     const batch = writeBatch(db);
-    for (const item of STARTER_DATA) {
-      const id = newId();
-      batch.set(doc(cardsRef, id), { id, ...item });
-    }
+    for (const item of STARTER_DATA) { const id = newId(); batch.set(doc(cardsRef, id), { id, ...item }); }
     await batch.commit();
   } catch (e) { console.error(e); setStatus('error', 'Failed to seed'); }
 });
@@ -564,6 +914,7 @@ document.getElementById('clearBtn').addEventListener('click', async () => {
   if (!confirm('Delete ALL cards from cloud? This cannot be undone.')) return;
   try {
     setStatus('syncing', 'Clearing…');
+    closeDetailPanel();
     const batch = writeBatch(db);
     for (const col of COLUMNS) for (const c of pipelineState[col.id]) batch.delete(doc(cardsRef, c.id));
     await batch.commit();
@@ -573,326 +924,216 @@ document.getElementById('clearBtn').addEventListener('click', async () => {
 renderBoard();
 
 // =====================================================
-// EMAIL TEMPLATES — charset-aware parser
+// EMAIL TEMPLATES
 // =====================================================
-
 let emails = [];
 let selectedEmailId = null;
 
 function splitHeadersBody(raw) {
   const match = raw.match(/\r?\n\r?\n/);
   if (!match) return { rawHeaders: raw, body: '' };
-  const idx = match.index;
-  return { rawHeaders: raw.slice(0, idx), body: raw.slice(idx + match[0].length) };
+  return { rawHeaders: raw.slice(0, match.index), body: raw.slice(match.index + match[0].length) };
 }
-
 function parseHeaders(rawHeaders) {
   const unfolded = rawHeaders.replace(/\r?\n([ \t])/g, ' ');
   const headers = {};
-  unfolded.split(/\r?\n/).forEach(line => {
-    const m = line.match(/^([^:]+):\s*(.*)$/);
-    if (m) headers[m[1].trim().toLowerCase()] = m[2];
-  });
+  unfolded.split(/\r?\n/).forEach(line => { const m = line.match(/^([^:]+):\s*(.*)$/); if (m) headers[m[1].trim().toLowerCase()] = m[2]; });
   return headers;
 }
-
 function parseContentType(value) {
   if (!value) return { type: 'text/plain', params: {} };
   const parts = value.split(';').map(s => s.trim());
   const type = parts.shift().toLowerCase();
   const params = {};
-  for (const p of parts) {
-    const m = p.match(/^([^=]+)=(.*)$/);
-    if (m) {
-      let v = m[2].trim();
-      if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
-      params[m[1].trim().toLowerCase()] = v;
-    }
-  }
+  for (const p of parts) { const m = p.match(/^([^=]+)=(.*)$/); if (m) { let v = m[2].trim(); if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1); params[m[1].trim().toLowerCase()] = v; } }
   return { type, params };
 }
-
-// Normalize charset name for TextDecoder (iso-8859-1 → windows-1252 fallback)
 function normalizeCharset(charset) {
   const c = (charset || 'utf-8').toLowerCase().replace(/[^a-z0-9]/g, '');
-  // TextDecoder doesn't support iso-8859-1 directly; windows-1252 is a superset and works
-  if (c === 'iso88591' || c === 'latin1') return 'windows-1252';
-  // Map common aliases
-  const map = { 'usascii': 'windows-1252', 'ascii': 'windows-1252' };
-  return map[c] || charset || 'utf-8';
+  if (c === 'iso88591' || c === 'latin1' || c === 'usascii' || c === 'ascii') return 'windows-1252';
+  return charset || 'utf-8';
 }
-
 function decodeBase64(s, charset) {
   try {
-    const clean = s.replace(/\s+/g, '');
-    const binary = atob(clean);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const bytes = new Uint8Array([...atob(s.replace(/\s+/g, ''))].map(c => c.charCodeAt(0)));
     return new TextDecoder(normalizeCharset(charset), { fatal: false }).decode(bytes);
-  } catch (e) {
-    console.warn('base64 decode failed', e);
-    return s;
-  }
+  } catch { return s; }
 }
-
 function decodeQp(s, charset) {
   const noSoft = s.replace(/=\r?\n/g, '');
   const bytes = [];
   for (let i = 0; i < noSoft.length; i++) {
-    if (noSoft[i] === '=' && i + 2 < noSoft.length && /[0-9A-Fa-f]{2}/.test(noSoft.substr(i + 1, 2))) {
-      bytes.push(parseInt(noSoft.substr(i + 1, 2), 16));
-      i += 2;
-    } else {
-      bytes.push(noSoft.charCodeAt(i));
-    }
+    if (noSoft[i] === '=' && i + 2 < noSoft.length && /[0-9A-Fa-f]{2}/.test(noSoft.substr(i+1,2))) { bytes.push(parseInt(noSoft.substr(i+1,2),16)); i+=2; }
+    else bytes.push(noSoft.charCodeAt(i));
   }
-  try {
-    return new TextDecoder(normalizeCharset(charset), { fatal: false }).decode(new Uint8Array(bytes));
-  } catch {
-    return String.fromCharCode(...bytes);
-  }
+  try { return new TextDecoder(normalizeCharset(charset), { fatal: false }).decode(new Uint8Array(bytes)); }
+  catch { return String.fromCharCode(...bytes); }
 }
-
 function decodePartBody(body, encoding, charset) {
-  const enc = (encoding || '').toLowerCase().trim();
-  if (enc === 'base64') return decodeBase64(body, charset);
-  if (enc === 'quoted-printable') return decodeQp(body, charset);
+  const enc = (encoding||'').toLowerCase().trim();
+  if (enc==='base64') return decodeBase64(body, charset);
+  if (enc==='quoted-printable') return decodeQp(body, charset);
   return body;
 }
-
 function decodeHeaderValue(s) {
   if (!s) return '';
-  return s.replace(/=\?([^?]+)\?([QqBb])\?([^?]*)\?=(\s+(?==\?))?/g, (_, charset, enc, text) => {
-    try {
-      if (enc.toUpperCase() === 'Q') return decodeQp(text.replace(/_/g, ' '), charset);
-      else return decodeBase64(text, charset);
-    } catch { return text; }
+  return s.replace(/=\?([^?]+)\?([QqBb])\?([^?]*)\?=(\s+(?==\?))?/g, (_,charset,enc,text) => {
+    try { return enc.toUpperCase()==='Q' ? decodeQp(text.replace(/_/g,' '),charset) : decodeBase64(text,charset); }
+    catch { return text; }
   });
 }
-
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function stripHtml(html) {
+  let c = html.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<script[\s\S]*?<\/script>/gi,'');
+  c = c.replace(/<br\s*\/?>/gi,'\n').replace(/<\/(p|div|li|h[1-6])>/gi,'\n');
+  const tmp = document.createElement('div'); tmp.innerHTML = c;
+  return (tmp.textContent||tmp.innerText||'').replace(/\n{3,}/g,'\n\n').trim();
+}
 function extractTextFromPart(part) {
-  const { rawHeaders, body } = splitHeadersBody(part);
+  const {rawHeaders,body} = splitHeadersBody(part);
   const headers = parseHeaders(rawHeaders);
   const ct = parseContentType(headers['content-type']);
   const encoding = headers['content-transfer-encoding'];
   const charset = ct.params.charset;
-
   if (ct.type.startsWith('multipart/')) {
     const boundary = ct.params.boundary;
-    if (!boundary) return { text: '', html: '' };
-    const sep = '--' + boundary;
-    const rawParts = body.split(new RegExp('\\r?\\n?' + escapeRegex(sep)));
-    let text = '', html = '';
-    for (let i = 1; i < rawParts.length; i++) {
-      let p = rawParts[i];
+    if (!boundary) return {text:'',html:''};
+    const rawParts = body.split(new RegExp('\\r?\\n?'+escapeRegex('--'+boundary)));
+    let text='',html='';
+    for (let i=1;i<rawParts.length;i++) {
+      let p=rawParts[i];
       if (p.startsWith('--')) break;
-      p = p.replace(/^\r?\n/, '');
-      const result = extractTextFromPart(p);
-      if (result.text && !text) text = result.text;
-      if (result.html && !html) html = result.html;
+      p=p.replace(/^\r?\n/,'');
+      const r=extractTextFromPart(p);
+      if (r.text&&!text) text=r.text;
+      if (r.html&&!html) html=r.html;
       if (text) break;
     }
-    return { text, html };
+    return {text,html};
   }
-
-  const decoded = decodePartBody(body, encoding, charset);
-  if (ct.type === 'text/plain') return { text: decoded, html: '' };
-  if (ct.type === 'text/html') return { text: '', html: decoded };
-  return { text: '', html: '' };
+  const decoded = decodePartBody(body,encoding,charset);
+  if (ct.type==='text/plain') return {text:decoded,html:''};
+  if (ct.type==='text/html') return {text:'',html:decoded};
+  return {text:'',html:''};
 }
-
-function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
-function stripHtml(html) {
-  let cleaned = html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '');
-  cleaned = cleaned.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n');
-  const tmp = document.createElement('div');
-  tmp.innerHTML = cleaned;
-  let text = tmp.textContent || tmp.innerText || '';
-  text = text.replace(/\n{3,}/g, '\n\n').trim();
-  return text;
-}
-
 function parseEml(rawText) {
-  const { rawHeaders, body } = splitHeadersBody(rawText);
+  const {rawHeaders,body} = splitHeadersBody(rawText);
   const headers = parseHeaders(rawHeaders);
   const ct = parseContentType(headers['content-type']);
   const encoding = headers['content-transfer-encoding'];
   const charset = ct.params.charset;
-
-  let bodyText = '';
+  let bodyText='';
   if (ct.type.startsWith('multipart/')) {
-    const result = extractTextFromPart(rawText);
-    bodyText = result.text || (result.html ? stripHtml(result.html) : '');
+    const r=extractTextFromPart(rawText);
+    bodyText=r.text||(r.html?stripHtml(r.html):'');
   } else {
-    const decoded = decodePartBody(body, encoding, charset);
-    bodyText = ct.type === 'text/html' ? stripHtml(decoded) : decoded;
+    const decoded=decodePartBody(body,encoding,charset);
+    bodyText=ct.type==='text/html'?stripHtml(decoded):decoded;
   }
-
   return {
-    subject: decodeHeaderValue(headers['subject'] || '(no subject)'),
-    from: decodeHeaderValue(headers['from'] || ''),
-    to: decodeHeaderValue(headers['to'] || ''),
-    cc: decodeHeaderValue(headers['cc'] || ''),
-    date: headers['date'] || '',
-    body: (bodyText || '').trim()
+    subject: decodeHeaderValue(headers['subject']||'(no subject)'),
+    from: decodeHeaderValue(headers['from']||''),
+    to: decodeHeaderValue(headers['to']||''),
+    cc: decodeHeaderValue(headers['cc']||''),
+    date: headers['date']||'',
+    body: (bodyText||'').trim()
   };
 }
-
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const d=new Date(dateStr);
   if (isNaN(d)) return dateStr;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
 }
-
 function renderEmailList() {
-  const list = document.getElementById('emailList');
-  list.innerHTML = '';
-  document.getElementById('emailCount').textContent = emails.length ? `(${emails.length})` : '';
-  if (!emails.length) {
-    list.innerHTML = '<div class="empty-state" style="padding: 12px 4px;">No emails yet.<br>Drop .eml files above.</div>';
-    return;
-  }
-  const sorted = [...emails].sort((a, b) => {
-    const da = new Date(a.date || 0).getTime() || 0;
-    const db = new Date(b.date || 0).getTime() || 0;
-    return db - da;
-  });
+  const list=document.getElementById('emailList');
+  list.innerHTML='';
+  document.getElementById('emailCount').textContent=emails.length?`(${emails.length})`:'';
+  if (!emails.length) { list.innerHTML='<div class="empty-state" style="padding:12px 4px;">No emails yet.<br>Drop .eml files above.</div>'; return; }
+  const sorted=[...emails].sort((a,b)=>(new Date(b.date||0).getTime()||0)-(new Date(a.date||0).getTime()||0));
   for (const email of sorted) {
-    const item = document.createElement('div');
-    item.className = 'email-item' + (email.id === selectedEmailId ? ' selected' : '');
-    const subj = document.createElement('div'); subj.className = 'subject'; subj.textContent = email.subject || '(no subject)';
-    const from = document.createElement('div'); from.className = 'from'; from.textContent = email.from || '';
-    const date = document.createElement('div'); date.className = 'date'; date.textContent = formatDate(email.date);
+    const item=document.createElement('div');
+    item.className='email-item'+(email.id===selectedEmailId?' selected':'');
+    const subj=document.createElement('div'); subj.className='esubject'; subj.textContent=email.subject||'(no subject)';
+    const from=document.createElement('div'); from.className='efrom'; from.textContent=email.from||'';
+    const date=document.createElement('div'); date.className='edate'; date.textContent=formatDate(email.date);
     item.appendChild(subj); item.appendChild(from); item.appendChild(date);
-    item.addEventListener('click', () => { selectedEmailId = email.id; renderEmailList(); renderEmailViewer(); });
+    item.addEventListener('click',()=>{ selectedEmailId=email.id; renderEmailList(); renderEmailViewer(); });
     list.appendChild(item);
   }
 }
-
 function renderEmailViewer() {
-  const viewer = document.getElementById('emailViewer');
-  const deleteBtn = document.getElementById('deleteEmailBtn');
-  const email = emails.find(e => e.id === selectedEmailId);
-  if (!email) {
-    viewer.innerHTML = '<div class="empty-state">Select an email from the inbox to view it here.</div>';
-    deleteBtn.style.display = 'none';
-    return;
-  }
-  deleteBtn.style.display = '';
-
-  const meta = document.createElement('div');
-  meta.className = 'email-meta';
-  const addMeta = (label, value) => {
-    if (!value) return;
-    const row = document.createElement('div');
-    const strong = document.createElement('strong'); strong.textContent = label + ':';
-    row.appendChild(strong);
-    row.appendChild(document.createTextNode(' ' + value));
-    meta.appendChild(row);
-  };
-  addMeta('Subject', email.subject);
-  addMeta('From', email.from);
-  addMeta('To', email.to);
-  addMeta('Cc', email.cc);
-  addMeta('Date', formatDate(email.date));
-
-  const body = document.createElement('div');
-  body.className = 'email-body';
-  body.textContent = email.body || '(empty body)';
-
-  viewer.innerHTML = '';
-  viewer.appendChild(meta);
-  viewer.appendChild(body);
+  const viewer=document.getElementById('emailViewer');
+  const deleteBtn=document.getElementById('deleteEmailBtn');
+  const email=emails.find(e=>e.id===selectedEmailId);
+  if (!email) { viewer.innerHTML='<div class="empty-state">Select an email from the inbox to view it here.</div>'; deleteBtn.style.display='none'; return; }
+  deleteBtn.style.display='';
+  const meta=document.createElement('div'); meta.className='email-meta';
+  const addMeta=(label,value)=>{ if (!value) return; const row=document.createElement('div'); const strong=document.createElement('strong'); strong.textContent=label+':'; row.appendChild(strong); row.appendChild(document.createTextNode(' '+value)); meta.appendChild(row); };
+  addMeta('Subject',email.subject); addMeta('From',email.from); addMeta('To',email.to); addMeta('Cc',email.cc); addMeta('Date',formatDate(email.date));
+  const body=document.createElement('div'); body.className='email-body'; body.textContent=email.body||'(empty body)';
+  viewer.innerHTML=''; viewer.appendChild(meta); viewer.appendChild(body);
 }
+onSnapshot(query(emailsRef),(snapshot)=>{ const all=[]; snapshot.forEach(d=>all.push({id:d.id,...d.data()})); emails=all; renderEmailList(); renderEmailViewer(); },(err)=>console.error('Email snapshot error',err));
 
-onSnapshot(query(emailsRef), (snapshot) => {
-  const all = [];
-  snapshot.forEach(docSnap => all.push({ id: docSnap.id, ...docSnap.data() }));
-  emails = all;
-  renderEmailList();
-  renderEmailViewer();
-}, (err) => { console.error('Email snapshot error', err); });
-
-const dropZone = document.getElementById('dropZone');
-const fileInput = document.getElementById('fileInput');
-
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropZone.classList.remove('dragover');
-  handleFiles(e.dataTransfer.files);
-});
-fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+const dropZone=document.getElementById('dropZone');
+const fileInput=document.getElementById('fileInput');
+dropZone.addEventListener('click',()=>fileInput.click());
+dropZone.addEventListener('dragover',(e)=>{ e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop',(e)=>{ e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change',(e)=>handleFiles(e.target.files));
 
 async function handleFiles(fileList) {
-  const files = Array.from(fileList);
+  const files=Array.from(fileList);
   if (!files.length) return;
-  setStatus('syncing', `Uploading ${files.length} file${files.length > 1 ? 's' : ''}…`);
-  let ok = 0, fail = 0;
+  setStatus('syncing',`Uploading ${files.length} file${files.length>1?'s':''}…`);
+  let ok=0,fail=0;
   for (const file of files) {
     try {
-      const text = await file.text();
-      const parsed = parseEml(text);
-      const id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      const record = { id, filename: file.name, ...parsed, uploadedAt: Date.now() };
-
-      const size = new Blob([JSON.stringify(record)]).size;
-      if (size > 900000) {
-        const overage = size - 900000;
-        record.body = (record.body || '').slice(0, Math.max((record.body || '').length - overage - 200, 10000)) + '\n\n[truncated — file too large for cloud storage]';
-      }
-      await setDoc(doc(emailsRef, id), record);
+      const text=await file.text();
+      const parsed=parseEml(text);
+      const id='e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      const record={id,filename:file.name,...parsed,uploadedAt:Date.now()};
+      const size=new Blob([JSON.stringify(record)]).size;
+      if (size>900000) { const overage=size-900000; record.body=(record.body||'').slice(0,Math.max((record.body||'').length-overage-200,10000))+'\n\n[truncated]'; }
+      await setDoc(doc(emailsRef,id),record);
       ok++;
-    } catch (e) {
-      console.error('Upload failed for', file.name, e);
-      fail++;
-    }
+    } catch(e) { console.error('Upload failed for',file.name,e); fail++; }
   }
-  fileInput.value = '';
-  setStatus('connected', 'Synced');
+  fileInput.value='';
+  setStatus('connected','Synced');
   if (fail) toast(`${ok} uploaded, ${fail} failed`);
-  else toast(`${ok} email${ok > 1 ? 's' : ''} uploaded`);
+  else toast(`${ok} email${ok>1?'s':''} uploaded`);
 }
 
-document.getElementById('deleteEmailBtn').addEventListener('click', async () => {
+document.getElementById('deleteEmailBtn').addEventListener('click',async()=>{
   if (!selectedEmailId) return;
   if (!confirm('Delete this email?')) return;
-  try {
-    setStatus('syncing', 'Deleting…');
-    await deleteDoc(doc(emailsRef, selectedEmailId));
-    selectedEmailId = null;
-    setStatus('connected', 'Synced');
-  } catch (e) { console.error(e); setStatus('error', 'Delete failed'); }
+  try { setStatus('syncing','Deleting…'); await deleteDoc(doc(emailsRef,selectedEmailId)); selectedEmailId=null; setStatus('connected','Synced'); }
+  catch(e) { console.error(e); setStatus('error','Delete failed'); }
 });
 
-document.getElementById('copyFromViewerBtn').addEventListener('click', () => {
-  const sel = window.getSelection().toString();
+document.getElementById('copyFromViewerBtn').addEventListener('click',()=>{
+  const sel=window.getSelection().toString();
   if (!sel) { toast('Select text in the viewer first'); return; }
-  const editor = document.getElementById('editorBody');
-  const cur = editor.value;
-  const start = editor.selectionStart ?? cur.length;
-  editor.value = cur.slice(0, start) + sel + cur.slice(start);
-  editor.focus();
-  toast('Copied to editor');
+  const editor=document.getElementById('editorBody');
+  const cur=editor.value; const start=editor.selectionStart??cur.length;
+  editor.value=cur.slice(0,start)+sel+cur.slice(start);
+  editor.focus(); toast('Copied to editor');
 });
-
-document.getElementById('copyEditorBtn').addEventListener('click', async () => {
-  const subject = document.getElementById('editorSubject').value;
-  const body = document.getElementById('editorBody').value;
-  const combined = (subject ? 'Subject: ' + subject + '\n\n' : '') + body;
+document.getElementById('copyEditorBtn').addEventListener('click',async()=>{
+  const subject=document.getElementById('editorSubject').value;
+  const body=document.getElementById('editorBody').value;
+  const combined=(subject?'Subject: '+subject+'\n\n':'')+body;
   try { await navigator.clipboard.writeText(combined); toast('Copied to clipboard'); }
   catch { toast('Copy failed — try selecting manually'); }
 });
-
-document.getElementById('clearEditorBtn').addEventListener('click', () => {
-  if (!document.getElementById('editorBody').value && !document.getElementById('editorSubject').value) return;
+document.getElementById('clearEditorBtn').addEventListener('click',()=>{
+  if (!document.getElementById('editorBody').value&&!document.getElementById('editorSubject').value) return;
   if (!confirm('Clear the editor?')) return;
-  document.getElementById('editorSubject').value = '';
-  document.getElementById('editorBody').value = '';
+  document.getElementById('editorSubject').value='';
+  document.getElementById('editorBody').value='';
 });
 </script>
 </body>
