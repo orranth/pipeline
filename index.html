@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Pipeline</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pipeline">
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f4ee;
+    --color-background-tertiary: #ebeae3;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
+    --color-text-info: #185FA5;
+    --color-text-success: #0F6E56;
+    --color-text-warning: #854F0B;
+    --color-text-danger: #A32D2D;
+    --color-border-tertiary: rgba(0,0,0,0.15);
+    --color-border-secondary: rgba(0,0,0,0.3);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1f1f1d;
+      --color-background-secondary: #2a2a28;
+      --color-background-tertiary: #353532;
+      --color-text-primary: #f0efe9;
+      --color-text-secondary: #B4B2A9;
+      --color-text-tertiary: #888780;
+      --color-text-info: #B5D4F4;
+      --color-text-success: #9FE1CB;
+      --color-text-warning: #FAC775;
+      --color-text-danger: #F7C1C1;
+      --color-border-tertiary: rgba(255,255,255,0.15);
+      --color-border-secondary: rgba(255,255,255,0.3);
+    }
+  }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    margin: 0;
+    padding: 1.5rem 1rem;
+    min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  button {
+    font-family: var(--font-sans);
+    background: transparent;
+    border: 0.5px solid var(--color-border-secondary);
+    color: var(--color-text-primary);
+    padding: 6px 12px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.05s;
+  }
+  button:hover { background: var(--color-background-secondary); }
+  button:active { transform: scale(0.98); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+
+  /* Mobile: stack columns vertically */
+  @media (max-width: 768px) {
+    body { padding: 1rem 0.75rem; }
+    #board { grid-template-columns: 1fr !important; }
+  }
+
+  /* Status indicator */
+  .status-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--color-text-tertiary); margin-right: 6px; vertical-align: middle;
+  }
+  .status-dot.connected { background: #1D9E75; }
+  .status-dot.syncing { background: #EF9F27; animation: pulse 1s infinite; }
+  .status-dot.error { background: #E24B4A; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+</style>
+</head>
+<body>
+<div class="container">
+<h2 class="sr-only">Cloud-synced sales pipeline Kanban board. Changes sync across devices in real time via Firestore.</h2>
+
+<div style="padding: 0.5rem 0;">
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 12px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <span style="font-size: 18px; font-weight: 500;">Pipeline</span>
+      <span id="totalCount" style="font-size: 13px; color: var(--color-text-secondary);"></span>
+      <span style="font-size: 12px; color: var(--color-text-tertiary);">
+        <span id="statusDot" class="status-dot"></span><span id="statusText">Connecting…</span>
+      </span>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button id="seedBtn" style="font-size: 13px;">Load starter data</button>
+      <button id="clearBtn" style="font-size: 13px;">Clear all</button>
+    </div>
+  </div>
+
+  <div id="board" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;"></div>
+  <p style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 12px;">Click text to edit · drag cards between columns · ✎ edit · ✓ done · ● color · × delete</p>
+</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, collection, doc, setDoc, deleteDoc,
+  onSnapshot, writeBatch, query
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_wehJhOVdo04r-z0-oS0mXYcDLfuA2Lg",
+  authDomain: "wpo-pipeline-board.firebaseapp.com",
+  databaseURL: "https://wpo-pipeline-board-default-rtdb.firebaseio.com",
+  projectId: "wpo-pipeline-board",
+  storageBucket: "wpo-pipeline-board.firebasestorage.app",
+  messagingSenderId: "28826988303",
+  appId: "1:28826988303:web:f084a5ee478c512efb587a"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const cardsRef = collection(db, "pipeline_cards");
+
+const COLUMNS = [
+  { id: 'queue',    title: 'Queue',             color: 'var(--color-text-primary)' },
+  { id: 'sent',     title: 'Sent',              color: 'var(--color-text-success)' },
+  { id: 'contact',  title: 'In contact',        color: 'var(--color-text-info)' },
+  { id: 'meeting',  title: 'Meeting scheduled', color: 'var(--color-text-warning)' }
+];
+
+const STARTER_DATA = [
+  { col: 'queue',   text: 'Will Bartholomew', done: true,  color: 'neutral', order: 0 },
+  { col: 'queue',   text: 'Thompson Paine',   done: false, color: 'neutral', order: 1 },
+  { col: 'queue',   text: 'Chuck Lovelace',   done: false, color: 'neutral', order: 2 },
+  { col: 'queue',   text: 'Ali Alford',       done: false, color: 'neutral', order: 3 },
+  { col: 'queue',   text: 'Brad Graner',      done: false, color: 'neutral', order: 4 },
+  { col: 'queue',   text: 'John Graves',      done: false, color: 'neutral', order: 5 },
+  { col: 'queue',   text: 'Josh Ford (idea)', done: false, color: 'neutral', order: 6 },
+  { col: 'sent',    text: 'Jason Rose (Clearsense)', done: false, color: 'neutral', order: 0 },
+  { col: 'sent',    text: 'Frontline Health',        done: true,  color: 'neutral', order: 1 },
+  { col: 'sent',    text: 'Will Bartholomew',        done: false, color: 'neutral', order: 2 },
+  { col: 'sent',    text: 'Charlie Pleas',           done: false, color: 'neutral', order: 3 },
+  { col: 'sent',    text: 'David Greer',             done: false, color: 'neutral', order: 4 },
+  { col: 'contact', text: 'Nolan Young (UnityAI)',   done: true,  color: 'neutral', order: 0 },
+  { col: 'meeting', text: 'Rob Metcalf — Fri 4/?',   done: false, color: 'neutral', order: 0 },
+  { col: 'meeting', text: 'Ted Davis — Mon 4/20',    done: false, color: 'neutral', order: 1 },
+  { col: 'meeting', text: 'UnityAI — Tues 4/22',     done: false, color: 'neutral', order: 2 },
+  { col: 'meeting', text: 'FrontlineHCP — Wed 4/23', done: false, color: 'neutral', order: 3 }
+];
+
+const PALETTE = [
+  { id: 'neutral', label: 'Neutral', fg: 'var(--color-text-secondary)', swatch: '#888780' },
+  { id: 'red',     label: 'Red',     fg: 'var(--color-text-danger)',    swatch: '#A32D2D' },
+  { id: 'amber',   label: 'Amber',   fg: 'var(--color-text-warning)',   swatch: '#BA7517' },
+  { id: 'green',   label: 'Green',   fg: 'var(--color-text-success)',   swatch: '#0F6E56' },
+  { id: 'blue',    label: 'Blue',    fg: 'var(--color-text-info)',      swatch: '#185FA5' }
+];
+const colorOf = (id) => PALETTE.find(p => p.id === id) || PALETTE[0];
+
+let state = { queue: [], sent: [], contact: [], meeting: [] };
+let dragData = null;
+let openColorPicker = null;
+let editingId = null;
+
+function setStatus(kind, text) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot ' + kind;
+  txt.textContent = text;
+}
+
+function newId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+function findCard(cardId) {
+  for (const col of COLUMNS) {
+    const idx = state[col.id].findIndex(c => c.id === cardId);
+    if (idx !== -1) return { col: col.id, idx, card: state[col.id][idx] };
+  }
+  return null;
+}
+
+async function saveCard(card) {
+  try {
+    setStatus('syncing', 'Saving…');
+    await setDoc(doc(cardsRef, card.id), card);
+  } catch (e) {
+    console.error('Save failed', e);
+    setStatus('error', 'Save failed');
+  }
+}
+
+async function deleteCardRemote(cardId) {
+  try {
+    setStatus('syncing', 'Saving…');
+    await deleteDoc(doc(cardsRef, cardId));
+  } catch (e) {
+    console.error('Delete failed', e);
+    setStatus('error', 'Delete failed');
+  }
+}
+
+async function moveCard(cardId, toCol) {
+  const found = findCard(cardId);
+  if (!found) return;
+  const card = { ...found.card, col: toCol, order: state[toCol].length };
+  await saveCard(card);
+}
+
+// Listen to all card changes in real time
+onSnapshot(query(cardsRef), (snapshot) => {
+  const all = [];
+  snapshot.forEach(docSnap => all.push({ id: docSnap.id, ...docSnap.data() }));
+  // Bucket by column
+  const next = { queue: [], sent: [], contact: [], meeting: [] };
+  for (const card of all) {
+    const col = card.col && next[card.col] ? card.col : 'queue';
+    next[col].push(card);
+  }
+  // Sort each column by order
+  for (const col of COLUMNS) {
+    next[col.id].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+  state = next;
+  setStatus('connected', 'Synced');
+  render();
+}, (err) => {
+  console.error('Snapshot error', err);
+  setStatus('error', 'Connection error');
+});
+
+function render() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  openColorPicker = null;
+
+  let total = 0, active = 0;
+  for (const col of COLUMNS) {
+    total += state[col.id].length;
+    active += state[col.id].filter(c => !c.done).length;
+  }
+  document.getElementById('totalCount').textContent = active + ' active · ' + total + ' total';
+
+  for (const col of COLUMNS) {
+    const colEl = document.createElement('div');
+    colEl.style.cssText = 'background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 12px; min-height: 240px; display: flex; flex-direction: column; gap: 8px;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;';
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size: 13px; font-weight: 500; color: ' + col.color + '; text-transform: uppercase; letter-spacing: 0.5px;';
+    title.textContent = col.title;
+    const count = document.createElement('span');
+    count.style.cssText = 'font-size: 12px; color: var(--color-text-tertiary);';
+    count.textContent = state[col.id].length;
+    header.appendChild(title);
+    header.appendChild(count);
+    colEl.appendChild(header);
+
+    for (const card of state[col.id]) {
+      colEl.appendChild(renderCard(card, col.id));
+    }
+
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ Add';
+    addBtn.style.cssText = 'font-size: 12px; padding: 6px 10px; margin-top: auto; align-self: flex-start;';
+    addBtn.addEventListener('click', async () => {
+      const id = newId();
+      const card = { id, col: col.id, text: '', done: false, color: 'neutral', order: state[col.id].length };
+      editingId = id;
+      // Optimistic: add locally so the input appears immediately
+      state[col.id].push(card);
+      render();
+      await saveCard(card);
+    });
+    colEl.appendChild(addBtn);
+
+    colEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      colEl.style.background = 'var(--color-background-tertiary)';
+    });
+    colEl.addEventListener('dragleave', () => {
+      colEl.style.background = 'var(--color-background-secondary)';
+    });
+    colEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      colEl.style.background = 'var(--color-background-secondary)';
+      if (dragData) moveCard(dragData, col.id);
+    });
+
+    board.appendChild(colEl);
+  }
+}
+
+function renderCard(card, colId) {
+  const colors = colorOf(card.color);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position: relative;';
+
+  const el = document.createElement('div');
+  el.draggable = (editingId !== card.id);
+  el.style.cssText = 'background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-left: 3px solid ' + colors.swatch + '; border-radius: var(--border-radius-md); padding: 8px 10px; cursor: grab; display: flex; align-items: center; gap: 8px; font-size: 13px;';
+
+  el.addEventListener('dragstart', (e) => {
+    if (editingId === card.id) { e.preventDefault(); return; }
+    dragData = card.id;
+    el.style.opacity = '0.4';
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  el.addEventListener('dragend', () => { el.style.opacity = '1'; dragData = null; });
+
+  if (editingId === card.id) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = card.text;
+    input.placeholder = 'Type and press Enter…';
+    input.style.cssText = 'flex: 1; font: inherit; color: ' + colors.fg + '; background: transparent; border: none; outline: none; padding: 0; min-width: 0;';
+    input.addEventListener('click', e => e.stopPropagation());
+    const commit = async () => {
+      const v = input.value.trim();
+      editingId = null;
+      if (v) {
+        card.text = v;
+        await saveCard(card);
+      } else {
+        await deleteCardRemote(card.id);
+      }
+    };
+    const cancel = async () => {
+      editingId = null;
+      if (!card.text) {
+        await deleteCardRemote(card.id);
+      } else {
+        render();
+      }
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+    input.addEventListener('blur', commit);
+    el.appendChild(input);
+    setTimeout(() => { input.focus(); input.select(); }, 0);
+  } else {
+    const text = document.createElement('span');
+    text.style.cssText = 'flex: 1; color: ' + colors.fg + '; cursor: text; min-width: 0; overflow: hidden; text-overflow: ellipsis;' + (card.done ? ' text-decoration: line-through; opacity: 0.5;' : '');
+    text.textContent = card.text;
+    text.title = 'Click to edit';
+    text.addEventListener('click', (e) => { e.stopPropagation(); editingId = card.id; render(); });
+    el.appendChild(text);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display: flex; gap: 2px; align-items: center;';
+
+    const editBtn = miniBtn('✎', 'Edit', () => { editingId = card.id; render(); });
+    const doneBtn = miniBtn(card.done ? '↺' : '✓', card.done ? 'Mark active' : 'Mark done', async () => {
+      card.done = !card.done;
+      await saveCard(card);
+    });
+
+    const colorBtn = document.createElement('button');
+    colorBtn.title = 'Change color';
+    colorBtn.style.cssText = 'background: ' + colors.swatch + '; border: 1px solid var(--color-border-tertiary); width: 14px; height: 14px; padding: 0; border-radius: 50%; cursor: pointer;';
+    colorBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePicker(wrap, card); });
+
+    const delBtn = miniBtn('×', 'Delete', async () => { await deleteCardRemote(card.id); });
+
+    actions.appendChild(editBtn);
+    actions.appendChild(doneBtn);
+    actions.appendChild(colorBtn);
+    actions.appendChild(delBtn);
+    el.appendChild(actions);
+  }
+
+  wrap.appendChild(el);
+  return wrap;
+}
+
+function togglePicker(wrap, card) {
+  const existing = wrap.querySelector('.color-picker');
+  if (existing) { existing.remove(); openColorPicker = null; return; }
+  if (openColorPicker) openColorPicker.remove();
+
+  const picker = document.createElement('div');
+  picker.className = 'color-picker';
+  picker.style.cssText = 'position: absolute; top: 100%; right: 4px; margin-top: 4px; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 6px; display: flex; gap: 6px; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.08);';
+
+  PALETTE.forEach(p => {
+    const sw = document.createElement('button');
+    sw.title = p.label;
+    const isActive = p.id === card.color;
+    sw.style.cssText = 'background: ' + p.swatch + '; border: ' + (isActive ? '2px solid var(--color-text-primary)' : '1px solid var(--color-border-tertiary)') + '; width: 18px; height: 18px; padding: 0; border-radius: 50%; cursor: pointer;';
+    sw.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      card.color = p.id;
+      await saveCard(card);
+    });
+    picker.appendChild(sw);
+  });
+
+  wrap.appendChild(picker);
+  openColorPicker = picker;
+}
+
+document.addEventListener('click', () => {
+  if (openColorPicker) { openColorPicker.remove(); openColorPicker = null; }
+});
+
+function miniBtn(label, title, onClick) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.title = title;
+  b.style.cssText = 'background: transparent; border: none; padding: 2px 6px; font-size: 13px; cursor: pointer; line-height: 1; color: var(--color-text-secondary); border-radius: var(--border-radius-md);';
+  b.addEventListener('mouseenter', () => b.style.background = 'var(--color-background-secondary)');
+  b.addEventListener('mouseleave', () => b.style.background = 'transparent');
+  b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+  return b;
+}
+
+document.getElementById('seedBtn').addEventListener('click', async () => {
+  if (!confirm('Load the original whiteboard contents? This will add them alongside any existing cards.')) return;
+  try {
+    setStatus('syncing', 'Loading starter data…');
+    const batch = writeBatch(db);
+    for (const item of STARTER_DATA) {
+      const id = newId();
+      batch.set(doc(cardsRef, id), { id, ...item });
+    }
+    await batch.commit();
+  } catch (e) {
+    console.error(e);
+    setStatus('error', 'Failed to seed');
+  }
+});
+
+document.getElementById('clearBtn').addEventListener('click', async () => {
+  if (!confirm('Delete ALL cards from cloud? This cannot be undone.')) return;
+  try {
+    setStatus('syncing', 'Clearing…');
+    const batch = writeBatch(db);
+    for (const col of COLUMNS) {
+      for (const c of state[col.id]) {
+        batch.delete(doc(cardsRef, c.id));
+      }
+    }
+    await batch.commit();
+  } catch (e) {
+    console.error(e);
+    setStatus('error', 'Clear failed');
+  }
+});
+
+// Initial empty render
+render();
+</script>
+</body>
+</html>
