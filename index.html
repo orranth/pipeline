@@ -230,6 +230,16 @@
   .inbox-subtab { flex: 1; padding: 6px 8px; font-size: 12px; cursor: pointer; border: none; border-radius: 0; color: var(--color-text-secondary); background: transparent; text-align: center; }
   .inbox-subtab.active { background: var(--color-background-primary); color: var(--color-text-primary); font-weight: 500; }
   .inbox-subtab:first-child { border-right: 0.5px solid var(--color-border-secondary); }
+  .new-draft-btn { font-size: 12px; padding: 4px 10px; }
+  .viewer-locked { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 8px 10px; font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 10px; }
+  .viewer-editable textarea, .viewer-editable input { width: 100%; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
+  .viewer-editable textarea { min-height: 260px; resize: vertical; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 200; }
+  .modal-box { background: var(--color-background-primary); border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-secondary); padding: 20px 22px; width: 360px; max-width: 90vw; }
+  .modal-box h3 { margin: 0 0 14px; font-size: 15px; font-weight: 500; }
+  .modal-box label { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }
+  .modal-box select, .modal-box input { width: 100%; margin-bottom: 14px; font-size: 13px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
   /* Card detail overlay hint */
   .card-el { position: relative; }
@@ -399,6 +409,7 @@
     <div class="panel">
       <div class="panel-header">
         <span>Inbox <span id="emailCount" style="color: var(--color-text-tertiary); font-weight: 400; text-transform: none;"></span></span>
+        <button class="new-draft-btn" id="newDraftBtn" style="display:none;">+ New</button>
       </div>
       <div class="panel-body">
         <div class="inbox-subtabs">
@@ -1233,17 +1244,102 @@ function renderEmailList() {
     list.appendChild(item);
   }
 }
+let viewerDebounceTimer = null;
+
 function renderEmailViewer() {
-  const viewer=document.getElementById('emailViewer');
-  const deleteBtn=document.getElementById('deleteEmailBtn');
-  const email=emails.find(e=>e.id===selectedEmailId);
-  if (!email) { viewer.innerHTML='<div class="empty-state">Select an email from the inbox to view it here.</div>'; deleteBtn.style.display='none'; return; }
-  deleteBtn.style.display='';
-  const meta=document.createElement('div'); meta.className='email-meta';
-  const addMeta=(label,value)=>{ if (!value) return; const row=document.createElement('div'); const strong=document.createElement('strong'); strong.textContent=label+':'; row.appendChild(strong); row.appendChild(document.createTextNode(' '+value)); meta.appendChild(row); };
-  addMeta('Subject',email.subject); addMeta('From',email.from); addMeta('To',email.to); addMeta('Cc',email.cc); addMeta('Date',formatDate(email.date));
-  const body=document.createElement('div'); body.className='email-body'; body.textContent=email.body||'(empty body)';
-  viewer.innerHTML=''; viewer.appendChild(meta); viewer.appendChild(body);
+  const viewer = document.getElementById('emailViewer');
+  const deleteBtn = document.getElementById('deleteEmailBtn');
+  const email = emails.find(e => e.id === selectedEmailId);
+  if (!email) {
+    viewer.innerHTML = '<div class="empty-state">Select an email from the inbox to view it here.</div>';
+    deleteBtn.style.display = 'none';
+    return;
+  }
+  deleteBtn.style.display = '';
+
+  const isPipeline = email.source === 'pipeline';
+  const isSent = email.emailStatus === 'sent';
+
+  viewer.innerHTML = '';
+
+  if (isPipeline && isSent) {
+    // Sent pipeline email — read-only with lock notice
+    const lock = document.createElement('div');
+    lock.className = 'viewer-locked';
+    lock.textContent = 'This email has been marked as sent and is locked for editing.';
+    viewer.appendChild(lock);
+  }
+
+  if (isPipeline && !isSent) {
+    // Editable pipeline draft — two-way synced
+    const wrap = document.createElement('div');
+    wrap.className = 'viewer-editable';
+
+    const subjectLbl = document.createElement('label'); subjectLbl.textContent = 'Subject (card title)';
+    const subjectInput = document.createElement('input');
+    subjectInput.type = 'text';
+    subjectInput.value = email.subject || '';
+    subjectInput.placeholder = 'Subject…';
+
+    const bodyLbl = document.createElement('label'); bodyLbl.textContent = 'Email body';
+    const bodyArea = document.createElement('textarea');
+    bodyArea.value = email.body || '';
+    bodyArea.placeholder = 'Email body…';
+
+    const saveInd = document.createElement('div');
+    saveInd.style.cssText = 'font-size: 11px; color: var(--color-text-tertiary); text-align: right; min-height: 16px; margin-bottom: 6px;';
+
+    const syncBack = () => {
+      clearTimeout(viewerDebounceTimer);
+      saveInd.textContent = 'Unsaved…';
+      viewerDebounceTimer = setTimeout(async () => {
+        // Update the email template record
+        email.subject = subjectInput.value;
+        email.body = bodyArea.value;
+        // Sync back to the pipeline card
+        if (email.cardId) {
+          const found = findCard(email.cardId);
+          if (found) {
+            found.card.text = subjectInput.value;
+            found.card.emailText = bodyArea.value;
+            try { await saveCard(found.card); } catch(e) { console.error(e); }
+          }
+        }
+        try {
+          await setDoc(doc(emailsRef, email.id), email);
+          saveInd.textContent = 'Saved';
+          setTimeout(() => { saveInd.textContent = ''; }, 1500);
+        } catch(e) { console.error(e); saveInd.textContent = 'Save failed'; }
+      }, 800);
+    };
+
+    subjectInput.addEventListener('input', syncBack);
+    bodyArea.addEventListener('input', syncBack);
+
+    wrap.appendChild(subjectLbl);
+    wrap.appendChild(subjectInput);
+    wrap.appendChild(bodyLbl);
+    wrap.appendChild(bodyArea);
+    wrap.appendChild(saveInd);
+    viewer.appendChild(wrap);
+    return;
+  }
+
+  // Read-only view (uploaded emails or sent pipeline emails)
+  const meta = document.createElement('div'); meta.className = 'email-meta';
+  const addMeta = (label, value) => {
+    if (!value) return;
+    const row = document.createElement('div');
+    const strong = document.createElement('strong'); strong.textContent = label + ':';
+    row.appendChild(strong);
+    row.appendChild(document.createTextNode(' ' + value));
+    meta.appendChild(row);
+  };
+  addMeta('Subject', email.subject); addMeta('From', email.from); addMeta('To', email.to);
+  addMeta('Cc', email.cc); addMeta('Date', formatDate(email.date));
+  const body = document.createElement('div'); body.className = 'email-body';
+  body.textContent = email.body || '(empty body)';
+  viewer.appendChild(meta); viewer.appendChild(body);
 }
 onSnapshot(query(emailsRef),(snapshot)=>{ const all=[]; snapshot.forEach(d=>all.push({id:d.id,...d.data()})); emails=all; renderEmailList(); renderEmailViewer(); },(err)=>console.error('Email snapshot error',err));
 
@@ -1253,9 +1349,115 @@ document.querySelectorAll('.inbox-subtab').forEach(btn => {
     btn.classList.add('active');
     activeInboxSubtab = btn.dataset.subtab;
     selectedEmailId = null;
+    document.getElementById('newDraftBtn').style.display = activeInboxSubtab === 'drafts' ? '' : 'none';
     renderEmailList();
     renderEmailViewer();
   });
+});
+
+// ── New Draft modal ──
+function getQueueCardsWithoutEmail() {
+  // All queue cards that don't already have a pushed template
+  const pushedIds = new Set(emails.filter(e => e.source === 'pipeline').map(e => e.cardId));
+  return (pipelineState.queue || []).filter(c => !pushedIds.has(c.id));
+}
+
+document.getElementById('newDraftBtn').addEventListener('click', () => {
+  const eligible = getQueueCardsWithoutEmail();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h3 = document.createElement('h3');
+  h3.textContent = 'New draft email';
+  box.appendChild(h3);
+
+  const cardLbl = document.createElement('label');
+  cardLbl.textContent = 'Link to pipeline card';
+  box.appendChild(cardLbl);
+
+  const cardSelect = document.createElement('select');
+  const blankOpt = document.createElement('option');
+  blankOpt.value = '';
+  blankOpt.textContent = eligible.length ? '— select a card —' : '(no eligible queue cards)';
+  cardSelect.appendChild(blankOpt);
+  eligible.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.text || '(untitled)';
+    cardSelect.appendChild(opt);
+  });
+  box.appendChild(cardSelect);
+
+  const subjectLbl = document.createElement('label');
+  subjectLbl.textContent = 'Subject (defaults to card title)';
+  box.appendChild(subjectLbl);
+
+  const subjectInput = document.createElement('input');
+  subjectInput.type = 'text';
+  subjectInput.placeholder = 'Subject…';
+  box.appendChild(subjectInput);
+
+  // Auto-fill subject when card is selected
+  cardSelect.addEventListener('change', () => {
+    const card = eligible.find(c => c.id === cardSelect.value);
+    if (card && !subjectInput.value) subjectInput.value = card.text || '';
+  });
+
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => overlay.remove());
+
+  const createBtn = document.createElement('button');
+  createBtn.textContent = 'Create draft';
+  createBtn.style.cssText = 'background: var(--color-background-info); border-color: var(--color-text-info); color: var(--color-text-info);';
+  createBtn.addEventListener('click', async () => {
+    const cardId = cardSelect.value;
+    if (!cardId) { alert('Please select a pipeline card.'); return; }
+    const subject = subjectInput.value.trim();
+    const found = findCard(cardId);
+    if (!found) { alert('Card not found.'); return; }
+
+    const id = 'pipeline-' + cardId;
+    const record = {
+      id,
+      source: 'pipeline',
+      cardId,
+      filename: '',
+      subject: subject || found.card.text || '(untitled)',
+      from: '', to: '', cc: '',
+      date: new Date().toISOString(),
+      body: found.card.emailText || '',
+      uploadedAt: Date.now(),
+      emailStatus: found.card.emailStatus || 'not-sent'
+    };
+    try {
+      setStatus('syncing', 'Creating draft…');
+      await setDoc(doc(emailsRef, id), record);
+      setStatus('connected', 'Synced');
+      selectedEmailId = id;
+      overlay.remove();
+      toast('Draft created');
+    } catch(e) {
+      console.error(e);
+      setStatus('error', 'Create failed');
+    }
+  });
+
+  actions.appendChild(cancelBtn);
+  actions.appendChild(createBtn);
+  box.appendChild(actions);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Close on backdrop click
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 });
 
 const dropZone=document.getElementById('dropZone');
