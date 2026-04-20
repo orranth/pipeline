@@ -1409,7 +1409,7 @@ document.getElementById('newDraftBtn').addEventListener('click', () => {
   box.appendChild(cardSelect);
 
   const subjectLbl = document.createElement('label');
-  subjectLbl.textContent = 'Subject (defaults to card title)';
+  subjectLbl.textContent = 'Subject';
   box.appendChild(subjectLbl);
 
   const subjectInput = document.createElement('input');
@@ -1543,12 +1543,12 @@ document.getElementById('saveDraftBtn').addEventListener('click', async () => {
   email.toAddress = to;
   email.subject = subj;
   email.body = body;
-  // Sync back to linked pipeline card
+  // Sync body back to linked pipeline card (subject is independent from card title)
   if (email.cardId) {
     const found = findCard(email.cardId);
     if (found) {
-      found.card.text = subj;
       found.card.emailText = body;
+      found.card.toAddress = to;
       try { await saveCard(found.card); } catch(e) { console.error(e); }
     }
   }
