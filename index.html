@@ -223,6 +223,13 @@
   .badge-not-sent { background: var(--color-background-secondary); color: var(--color-text-tertiary); }
   .badge-drafting { background: #FAEEDA; color: #854F0B; }
   .badge-sent { background: #E1F5EE; color: #0F6E56; }
+  .email-item.pipeline-source { background: var(--color-background-tertiary); border-color: var(--color-border-tertiary); }
+  .email-item.pipeline-source .esubject { color: var(--color-text-secondary); }
+  .pipeline-tag { font-size: 10px; color: var(--color-text-tertiary); font-style: italic; margin-top: 2px; }
+  .inbox-subtabs { display: flex; gap: 0; margin-bottom: 10px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); overflow: hidden; }
+  .inbox-subtab { flex: 1; padding: 6px 8px; font-size: 12px; cursor: pointer; border: none; border-radius: 0; color: var(--color-text-secondary); background: transparent; text-align: center; }
+  .inbox-subtab.active { background: var(--color-background-primary); color: var(--color-text-primary); font-weight: 500; }
+  .inbox-subtab:first-child { border-right: 0.5px solid var(--color-border-secondary); }
 
   /* Card detail overlay hint */
   .card-el { position: relative; }
@@ -394,6 +401,10 @@
         <span>Inbox <span id="emailCount" style="color: var(--color-text-tertiary); font-weight: 400; text-transform: none;"></span></span>
       </div>
       <div class="panel-body">
+        <div class="inbox-subtabs">
+          <button class="inbox-subtab active" data-subtab="drafts">Drafts</button>
+          <button class="inbox-subtab" data-subtab="sent">Sent</button>
+        </div>
         <div class="drop-zone" id="dropZone">
           <div>Drop .eml files here<br>or click to upload</div>
           <input type="file" id="fileInput" accept=".eml,.txt,message/rfc822" multiple style="display: none; width: auto;">
@@ -890,6 +901,13 @@ function renderDetailPanel(card) {
       if (!found) return;
       found.card.emailStatus = s.id;
       await saveCard(found.card);
+      // If a pushed template exists for this card, update its emailStatus too
+      const tplId = 'pipeline-' + card.id;
+      const tpl = emails.find(e => e.id === tplId);
+      if (tpl) {
+        tpl.emailStatus = s.id;
+        try { await setDoc(doc(emailsRef, tplId), tpl); } catch(e) { console.error(e); }
+      }
       // Re-render panel and board
       renderDetailPanel(found.card);
     });
@@ -914,8 +932,57 @@ function renderDetailPanel(card) {
     debouncedSave();
   });
   emailTextField.appendChild(emailTextArea);
+
+  const pushBtn = document.createElement('button');
+  pushBtn.textContent = 'Push to email templates';
+  pushBtn.style.cssText = 'font-size: 12px; margin-top: 6px; width: 100%; background: var(--color-background-info); border-color: var(--color-text-info); color: var(--color-text-info);';
+  pushBtn.addEventListener('click', () => pushCardToTemplates(card.id));
+  emailTextField.appendChild(pushBtn);
+
   body.appendChild(emailTextField);
 }
+
+async function pushCardToTemplates(cardId) {
+  const found = findCard(cardId);
+  if (!found) return;
+  const card = found.card;
+  if (!card.emailText || !card.emailText.trim()) {
+    alert('No email text to push — fill in the "Email draft / notes" field first.');
+    return;
+  }
+  // Check if a pipeline entry for this card already exists
+  const existingId = 'pipeline-' + cardId;
+  const existing = emails.find(e => e.id === existingId);
+  if (existing) {
+    if (!confirm('A template for "' + (card.text || 'this card') + '" already exists. Overwrite it?')) return;
+  }
+  const record = {
+    id: existingId,
+    source: 'pipeline',
+    cardId: cardId,
+    filename: '',
+    subject: card.text || '(untitled)',
+    from: '',
+    to: '',
+    cc: '',
+    date: new Date().toISOString(),
+    body: card.emailText,
+    uploadedAt: Date.now(),
+    emailStatus: card.emailStatus || 'not-sent'
+  };
+  try {
+    setStatus('syncing', 'Pushing to templates…');
+    await setDoc(doc(emailsRef, existingId), record);
+    setStatus('connected', 'Synced');
+    toast('Pushed to email templates');
+  } catch (e) {
+    console.error('Push failed', e);
+    setStatus('error', 'Push failed');
+  }
+}
+
+// Subtab state
+let activeInboxSubtab = 'drafts';
 
 function closeDetailPanel() {
   selectedCardId = null;
@@ -1109,16 +1176,40 @@ function formatDate(dateStr) {
 function renderEmailList() {
   const list=document.getElementById('emailList');
   list.innerHTML='';
-  document.getElementById('emailCount').textContent=emails.length?`(${emails.length})`:'';
-  if (!emails.length) { list.innerHTML='<div class="empty-state" style="padding:12px 4px;">No emails yet.<br>Drop .eml files above.</div>'; return; }
-  const sorted=[...emails].sort((a,b)=>(new Date(b.date||0).getTime()||0)-(new Date(a.date||0).getTime()||0));
+
+  // Filter by subtab:
+  // Sent = uploaded .eml files + pipeline entries with emailStatus 'sent'
+  // Drafts = pipeline entries with emailStatus 'not-sent' or 'drafting'
+  const filtered = emails.filter(e => {
+    if (activeInboxSubtab === 'sent') {
+      return e.source !== 'pipeline' || e.emailStatus === 'sent';
+    } else {
+      return e.source === 'pipeline' && e.emailStatus !== 'sent';
+    }
+  });
+
+  document.getElementById('emailCount').textContent = filtered.length ? `(${filtered.length})` : '';
+  if (!filtered.length) {
+    const msg = activeInboxSubtab === 'sent'
+      ? 'No sent emails yet.<br>Upload .eml files above or mark a pipeline card as Sent.'
+      : 'No drafts yet.<br>Fill in email text on a pipeline card and click "Push to email templates".';
+    list.innerHTML = '<div class="empty-state" style="padding:12px 4px;">' + msg + '</div>';
+    return;
+  }
+
+  const sorted=[...filtered].sort((a,b)=>(new Date(b.date||0).getTime()||0)-(new Date(a.date||0).getTime()||0));
   for (const email of sorted) {
+    const isPipeline = email.source === 'pipeline';
     const item=document.createElement('div');
-    item.className='email-item'+(email.id===selectedEmailId?' selected':'');
+    item.className='email-item' + (isPipeline ? ' pipeline-source' : '') + (email.id===selectedEmailId?' selected':'');
     const subj=document.createElement('div'); subj.className='esubject'; subj.textContent=email.subject||'(no subject)';
-    const from=document.createElement('div'); from.className='efrom'; from.textContent=email.from||'';
+    const from=document.createElement('div'); from.className='efrom'; from.textContent=isPipeline ? 'From pipeline' : (email.from||'');
     const date=document.createElement('div'); date.className='edate'; date.textContent=formatDate(email.date);
     item.appendChild(subj); item.appendChild(from); item.appendChild(date);
+    if (isPipeline) {
+      const tag=document.createElement('div'); tag.className='pipeline-tag'; tag.textContent='pipeline draft';
+      item.appendChild(tag);
+    }
     item.addEventListener('click',()=>{ selectedEmailId=email.id; renderEmailList(); renderEmailViewer(); });
     list.appendChild(item);
   }
@@ -1136,6 +1227,17 @@ function renderEmailViewer() {
   viewer.innerHTML=''; viewer.appendChild(meta); viewer.appendChild(body);
 }
 onSnapshot(query(emailsRef),(snapshot)=>{ const all=[]; snapshot.forEach(d=>all.push({id:d.id,...d.data()})); emails=all; renderEmailList(); renderEmailViewer(); },(err)=>console.error('Email snapshot error',err));
+
+document.querySelectorAll('.inbox-subtab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.inbox-subtab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeInboxSubtab = btn.dataset.subtab;
+    selectedEmailId = null;
+    renderEmailList();
+    renderEmailViewer();
+  });
+});
 
 const dropZone=document.getElementById('dropZone');
 const fileInput=document.getElementById('fileInput');
