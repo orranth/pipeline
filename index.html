@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sales Pipeline</title>
+<title>WPO Internship Tracker</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Pipeline">
+<meta name="apple-mobile-web-app-title" content="WPO Tracker">
 <style>
   :root {
     --color-background-primary: #ffffff;
@@ -601,6 +601,7 @@ async function moveCard(cardId, toCol, toIndex) {
   try { await batch.commit(); }
   catch (e) { console.error('Move failed', e); setStatus('error', 'Move failed'); }
 }
+window.__moveCard = moveCard;
 
 onSnapshot(query(cardsRef), (snapshot) => {
   const all = [];
@@ -641,6 +642,7 @@ function renderBoard() {
   for (const col of COLUMNS) {
     const colEl = document.createElement('div');
     colEl.style.cssText = 'background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 12px; min-height: 240px; display: flex; flex-direction: column; gap: 8px;';
+    colEl.dataset.col = col.id;
 
     const header = document.createElement('div');
     header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;';
@@ -1589,6 +1591,107 @@ document.getElementById('copyEditorBtn').addEventListener('click', async () => {
   catch { toast('Copy failed — try selecting manually'); }
 });
 // clearEditorBtn removed
+</script>
+
+<script>
+// ── Touch drag support for iPad / mobile ──
+(function() {
+  let touchDragId = null;
+  let touchClone = null;
+  let touchOffsetX = 0;
+  let touchOffsetY = 0;
+
+  function getCardWrapAtPoint(x, y) {
+    // Temporarily hide the clone so elementFromPoint finds real elements
+    if (touchClone) touchClone.style.display = 'none';
+    const el = document.elementFromPoint(x, y);
+    if (touchClone) touchClone.style.display = '';
+    if (!el) return null;
+    return el.closest('.card-wrap');
+  }
+
+  function getColAtPoint(x, y) {
+    if (touchClone) touchClone.style.display = 'none';
+    const el = document.elementFromPoint(x, y);
+    if (touchClone) touchClone.style.display = '';
+    if (!el) return null;
+    // Walk up to find a column (has data-col attribute)
+    let node = el;
+    while (node && node !== document.body) {
+      if (node.dataset && node.dataset.col) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  document.addEventListener('touchstart', function(e) {
+    const cardEl = e.target.closest('.card-el');
+    if (!cardEl) return;
+    const wrap = cardEl.closest('.card-wrap');
+    if (!wrap || !wrap.dataset.cardId) return;
+    // Don't start drag if tapping a button
+    if (e.target.closest('button')) return;
+
+    const touch = e.touches[0];
+    const rect = cardEl.getBoundingClientRect();
+    touchOffsetX = touch.clientX - rect.left;
+    touchOffsetY = touch.clientY - rect.top;
+    touchDragId = wrap.dataset.cardId;
+
+    // Create a visual clone
+    touchClone = cardEl.cloneNode(true);
+    touchClone.style.cssText = 'position: fixed; pointer-events: none; z-index: 9999; opacity: 0.85; width: ' + rect.width + 'px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); border-radius: 8px; transition: none;';
+    touchClone.style.left = (touch.clientX - touchOffsetX) + 'px';
+    touchClone.style.top = (touch.clientY - touchOffsetY) + 'px';
+    document.body.appendChild(touchClone);
+    cardEl.style.opacity = '0.3';
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!touchDragId || !touchClone) return;
+    const touch = e.touches[0];
+    touchClone.style.left = (touch.clientX - touchOffsetX) + 'px';
+    touchClone.style.top = (touch.clientY - touchOffsetY) + 'px';
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('touchend', function(e) {
+    if (!touchDragId) return;
+    const touch = e.changedTouches[0];
+
+    // Restore original card opacity
+    const origWrap = document.querySelector('.card-wrap[data-card-id="' + touchDragId + '"]');
+    if (origWrap) {
+      const origEl = origWrap.querySelector('.card-el');
+      if (origEl) origEl.style.opacity = '1';
+    }
+
+    // Remove clone
+    if (touchClone) { touchClone.remove(); touchClone = null; }
+
+    // Find drop target
+    const targetWrap = getCardWrapAtPoint(touch.clientX, touch.clientY);
+    const targetCol = getColAtPoint(touch.clientX, touch.clientY);
+
+    if (!targetCol) { touchDragId = null; return; }
+
+    const toColId = targetCol.dataset.col;
+    let toIndex;
+
+    if (targetWrap && targetWrap.dataset.cardId !== touchDragId) {
+      // Find index of card we're dropping onto
+      const colCards = Array.from(targetCol.querySelectorAll('.card-wrap'));
+      const targetIdx = colCards.findIndex(w => w.dataset.cardId === targetWrap.dataset.cardId);
+      toIndex = targetIdx >= 0 ? targetIdx : undefined;
+    }
+
+    // Call the existing moveCard function (defined in module scope — access via window)
+    if (window.__moveCard) window.__moveCard(touchDragId, toColId, toIndex);
+
+    touchDragId = null;
+  }, { passive: false });
+})();
 </script>
 </body>
 </html>
