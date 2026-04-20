@@ -315,7 +315,7 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 
 // =====================================================
-// PIPELINE
+// PIPELINE (unchanged)
 // =====================================================
 const COLUMNS = [
   { id: 'queue',    title: 'Queue',             color: 'var(--color-text-primary)' },
@@ -573,28 +573,20 @@ document.getElementById('clearBtn').addEventListener('click', async () => {
 renderBoard();
 
 // =====================================================
-// EMAIL TEMPLATES — rewritten parser
+// EMAIL TEMPLATES — charset-aware parser
 // =====================================================
 
 let emails = [];
 let selectedEmailId = null;
 
-// --- Parser utilities ---
-
-// Split a MIME message (or part) into {rawHeaders, body}
 function splitHeadersBody(raw) {
   const match = raw.match(/\r?\n\r?\n/);
   if (!match) return { rawHeaders: raw, body: '' };
   const idx = match.index;
-  return {
-    rawHeaders: raw.slice(0, idx),
-    body: raw.slice(idx + match[0].length)
-  };
+  return { rawHeaders: raw.slice(0, idx), body: raw.slice(idx + match[0].length) };
 }
 
-// Parse headers, handling folded continuation lines (lines starting with whitespace)
 function parseHeaders(rawHeaders) {
-  // Unfold: join continuation lines
   const unfolded = rawHeaders.replace(/\r?\n([ \t])/g, ' ');
   const headers = {};
   unfolded.split(/\r?\n/).forEach(line => {
@@ -604,7 +596,6 @@ function parseHeaders(rawHeaders) {
   return headers;
 }
 
-// Parse a Content-Type header value: returns { type, params }
 function parseContentType(value) {
   if (!value) return { type: 'text/plain', params: {} };
   const parts = value.split(';').map(s => s.trim());
@@ -621,23 +612,30 @@ function parseContentType(value) {
   return { type, params };
 }
 
-// Decode a base64 string to UTF-8
-function decodeBase64Utf8(s) {
+// Normalize charset name for TextDecoder (iso-8859-1 → windows-1252 fallback)
+function normalizeCharset(charset) {
+  const c = (charset || 'utf-8').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // TextDecoder doesn't support iso-8859-1 directly; windows-1252 is a superset and works
+  if (c === 'iso88591' || c === 'latin1') return 'windows-1252';
+  // Map common aliases
+  const map = { 'usascii': 'windows-1252', 'ascii': 'windows-1252' };
+  return map[c] || charset || 'utf-8';
+}
+
+function decodeBase64(s, charset) {
   try {
     const clean = s.replace(/\s+/g, '');
     const binary = atob(clean);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    return new TextDecoder(normalizeCharset(charset), { fatal: false }).decode(bytes);
   } catch (e) {
     console.warn('base64 decode failed', e);
     return s;
   }
 }
 
-// Decode quoted-printable to UTF-8
-function decodeQpUtf8(s) {
-  // Remove soft line breaks, then decode =XX sequences to bytes, then UTF-8 decode the bytes
+function decodeQp(s, charset) {
   const noSoft = s.replace(/=\r?\n/g, '');
   const bytes = [];
   for (let i = 0; i < noSoft.length; i++) {
@@ -649,86 +647,68 @@ function decodeQpUtf8(s) {
     }
   }
   try {
-    return new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
+    return new TextDecoder(normalizeCharset(charset), { fatal: false }).decode(new Uint8Array(bytes));
   } catch {
     return String.fromCharCode(...bytes);
   }
 }
 
-// Decode a body based on Content-Transfer-Encoding
-function decodePartBody(body, encoding) {
+function decodePartBody(body, encoding, charset) {
   const enc = (encoding || '').toLowerCase().trim();
-  if (enc === 'base64') return decodeBase64Utf8(body);
-  if (enc === 'quoted-printable') return decodeQpUtf8(body);
-  // 7bit, 8bit, binary, or none — return as-is
+  if (enc === 'base64') return decodeBase64(body, charset);
+  if (enc === 'quoted-printable') return decodeQp(body, charset);
   return body;
 }
 
-// Decode RFC 2047 encoded-words in headers (e.g. =?UTF-8?Q?=E2=9C=93?=)
 function decodeHeaderValue(s) {
   if (!s) return '';
   return s.replace(/=\?([^?]+)\?([QqBb])\?([^?]*)\?=(\s+(?==\?))?/g, (_, charset, enc, text) => {
     try {
-      if (enc.toUpperCase() === 'Q') {
-        return decodeQpUtf8(text.replace(/_/g, ' '));
-      } else {
-        return decodeBase64Utf8(text);
-      }
+      if (enc.toUpperCase() === 'Q') return decodeQp(text.replace(/_/g, ' '), charset);
+      else return decodeBase64(text, charset);
     } catch { return text; }
   });
 }
 
-// Recursively walk a MIME part tree, collecting text parts
-// Returns { text, html } — whichever is found (text preferred)
 function extractTextFromPart(part) {
   const { rawHeaders, body } = splitHeadersBody(part);
   const headers = parseHeaders(rawHeaders);
   const ct = parseContentType(headers['content-type']);
   const encoding = headers['content-transfer-encoding'];
+  const charset = ct.params.charset;
 
   if (ct.type.startsWith('multipart/')) {
     const boundary = ct.params.boundary;
     if (!boundary) return { text: '', html: '' };
-    // Split by boundary. Each boundary line is "--BOUNDARY" and the terminator is "--BOUNDARY--"
     const sep = '--' + boundary;
     const rawParts = body.split(new RegExp('\\r?\\n?' + escapeRegex(sep)));
-    // The first element before the first boundary is preamble — ignore.
-    // Elements after the final "--" are epilogue — ignore.
     let text = '', html = '';
     for (let i = 1; i < rawParts.length; i++) {
       let p = rawParts[i];
-      // If this is the terminating boundary ("--BOUNDARY--"), stop.
       if (p.startsWith('--')) break;
-      // Trim leading CRLF after boundary
       p = p.replace(/^\r?\n/, '');
       const result = extractTextFromPart(p);
       if (result.text && !text) text = result.text;
       if (result.html && !html) html = result.html;
-      // For multipart/alternative prefer text/plain; for multipart/mixed take first text
       if (text) break;
     }
     return { text, html };
   }
 
-  const decoded = decodePartBody(body, encoding);
+  const decoded = decodePartBody(body, encoding, charset);
   if (ct.type === 'text/plain') return { text: decoded, html: '' };
   if (ct.type === 'text/html') return { text: '', html: decoded };
-  // Non-text part (attachment, etc.) — skip
   return { text: '', html: '' };
 }
 
 function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 function stripHtml(html) {
-  // Remove <style> and <script> blocks entirely
   let cleaned = html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '');
-  // Convert <br>, <p>, </p>, </div> to line breaks
   cleaned = cleaned.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n');
-  // Use DOM to strip remaining tags and decode entities
   const tmp = document.createElement('div');
   tmp.innerHTML = cleaned;
   let text = tmp.textContent || tmp.innerText || '';
-  // Collapse 3+ newlines to 2
   text = text.replace(/\n{3,}/g, '\n\n').trim();
   return text;
 }
@@ -738,13 +718,14 @@ function parseEml(rawText) {
   const headers = parseHeaders(rawHeaders);
   const ct = parseContentType(headers['content-type']);
   const encoding = headers['content-transfer-encoding'];
+  const charset = ct.params.charset;
 
   let bodyText = '';
   if (ct.type.startsWith('multipart/')) {
     const result = extractTextFromPart(rawText);
     bodyText = result.text || (result.html ? stripHtml(result.html) : '');
   } else {
-    const decoded = decodePartBody(body, encoding);
+    const decoded = decodePartBody(body, encoding, charset);
     bodyText = ct.type === 'text/html' ? stripHtml(decoded) : decoded;
   }
 
@@ -775,8 +756,8 @@ function renderEmailList() {
   }
   const sorted = [...emails].sort((a, b) => {
     const da = new Date(a.date || 0).getTime() || 0;
-    const dbb = new Date(b.date || 0).getTime() || 0;
-    return dbb - da;
+    const db = new Date(b.date || 0).getTime() || 0;
+    return db - da;
   });
   for (const email of sorted) {
     const item = document.createElement('div');
