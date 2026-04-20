@@ -434,7 +434,10 @@
     <div class="panel">
       <div class="panel-header">
         <span>Drafts editor</span>
-        <span id="editorSaveInd" style="font-size: 11px; color: var(--color-text-tertiary); font-weight: 400; text-transform: none;"></span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="editorSaveInd" style="font-size: 11px; color: var(--color-text-tertiary);"></span>
+          <button id="deleteDraftBtn" style="font-size: 12px; padding: 4px 10px; display: none; color: var(--color-text-danger); border-color: var(--color-text-danger);">Delete</button>
+        </div>
       </div>
       <div class="panel-body" id="emailEditor" style="display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1;">
         <div id="editorEmpty" class="empty-state">Select a draft from the Drafts tab to edit it here.</div>
@@ -445,7 +448,8 @@
           <label style="font-size:12px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;">Email body</label>
           <textarea id="editorBody" style="flex:1;min-height:200px;font-size:13px;line-height:1.6;" placeholder="Your email here…"></textarea>
           <div class="editor-toolbar">
-            <button id="copyEditorBtn" style="font-size: 12px;">Copy all to clipboard</button>
+            <button id="saveDraftBtn" style="font-size: 12px; background: var(--color-background-info); border-color: var(--color-text-info); color: var(--color-text-info);">Save</button>
+            <button id="copyEditorBtn" style="font-size: 12px;">Copy to clipboard</button>
           </div>
         </div>
       </div>
@@ -1249,8 +1253,6 @@ function renderEmailList() {
     list.appendChild(item);
   }
 }
-let viewerDebounceTimer = null;
-
 function renderEmailViewer() {
   const viewer = document.getElementById('emailViewer');
   const deleteBtn = document.getElementById('deleteEmailBtn');
@@ -1300,13 +1302,16 @@ function renderEmailEditor(forceReload = false) {
   const lockBanner = document.getElementById('editorLockBanner');
   const subjectInput = document.getElementById('editorSubject');
   const bodyArea = document.getElementById('editorBody');
-  const saveInd = document.getElementById('editorSaveInd');
+  const saveBtn = document.getElementById('saveDraftBtn');
+  const deleteDraftBtn = document.getElementById('deleteDraftBtn');
 
   const email = emails.find(e => e.id === selectedDraftId);
   if (!email) {
     empty.style.display = '';
     form.style.display = 'none';
     editorLoadedId = null;
+    if (deleteDraftBtn) deleteDraftBtn.style.display = 'none';
+    if (saveBtn) saveBtn.style.display = 'none';
     return;
   }
 
@@ -1319,51 +1324,15 @@ function renderEmailEditor(forceReload = false) {
   bodyArea.disabled = isSent;
   subjectInput.style.opacity = isSent ? '0.5' : '1';
   bodyArea.style.opacity = isSent ? '0.5' : '1';
+  if (saveBtn) saveBtn.style.display = isSent ? 'none' : '';
+  if (deleteDraftBtn) deleteDraftBtn.style.display = '';
 
-  // Only repopulate fields + re-wire listeners when the selection actually changes.
-  // This prevents focus loss while typing — snapshot refreshes from our own saves
-  // will hit this function but bail out here without touching the DOM.
+  // Only repopulate fields when selection changes — never while user is typing
   if (editorLoadedId === email.id && !forceReload) return;
   editorLoadedId = email.id;
 
   subjectInput.value = email.subject || '';
   bodyArea.value = email.body || '';
-
-  // Wire up save-back listener (safe to add multiple times since we guard with editorLoadedId)
-  subjectInput.oninput = null;
-  bodyArea.oninput = null;
-
-  if (!isSent) {
-    const syncBack = () => {
-      clearTimeout(viewerDebounceTimer);
-      saveInd.textContent = 'Unsaved…';
-      viewerDebounceTimer = setTimeout(async () => {
-        // Read live values from DOM — not stale closure variables
-        const subj = document.getElementById('editorSubject').value;
-        const body = document.getElementById('editorBody').value;
-        email.subject = subj;
-        email.body = body;
-        if (email.cardId) {
-          const found = findCard(email.cardId);
-          if (found) {
-            found.card.text = subj;
-            found.card.emailText = body;
-            try { await saveCard(found.card); } catch(e) { console.error(e); }
-          }
-        }
-        try {
-          await setDoc(doc(emailsRef, email.id), email);
-          document.getElementById('editorSaveInd').textContent = 'Saved';
-          setTimeout(() => {
-            const ind = document.getElementById('editorSaveInd');
-            if (ind) ind.textContent = '';
-          }, 1500);
-        } catch(e) { console.error(e); document.getElementById('editorSaveInd').textContent = 'Save failed'; }
-      }, 800);
-    };
-    subjectInput.oninput = syncBack;
-    bodyArea.oninput = syncBack;
-  }
 }
 
 onSnapshot(query(emailsRef),(snapshot)=>{ const all=[]; snapshot.forEach(d=>all.push({id:d.id,...d.data()})); emails=all; renderEmailList(); renderEmailViewer(); renderEmailEditor(); },(err)=>console.error('Email snapshot error',err));
@@ -1524,6 +1493,58 @@ document.getElementById('deleteEmailBtn').addEventListener('click',async()=>{
   if (!confirm('Delete this email?')) return;
   try { setStatus('syncing','Deleting…'); await deleteDoc(doc(emailsRef,selectedEmailId)); selectedEmailId=null; setStatus('connected','Synced'); }
   catch(e) { console.error(e); setStatus('error','Delete failed'); }
+});
+
+document.getElementById('deleteDraftBtn').addEventListener('click', async () => {
+  if (!selectedDraftId) return;
+  if (!confirm('Delete this draft? This cannot be undone.')) return;
+  try {
+    setStatus('syncing', 'Deleting…');
+    await deleteDoc(doc(emailsRef, selectedDraftId));
+    selectedDraftId = null;
+    editorLoadedId = null;
+    setStatus('connected', 'Synced');
+    renderEmailList();
+    renderEmailEditor(true);
+  } catch(e) { console.error(e); setStatus('error', 'Delete failed'); }
+});
+
+document.getElementById('saveDraftBtn').addEventListener('click', async () => {
+  if (!selectedDraftId) return;
+  const email = emails.find(e => e.id === selectedDraftId);
+  if (!email) return;
+  const subj = document.getElementById('editorSubject').value;
+  const body = document.getElementById('editorBody').value;
+  const saveInd = document.getElementById('editorSaveInd');
+  const saveBtn = document.getElementById('saveDraftBtn');
+  email.subject = subj;
+  email.body = body;
+  // Sync back to linked pipeline card
+  if (email.cardId) {
+    const found = findCard(email.cardId);
+    if (found) {
+      found.card.text = subj;
+      found.card.emailText = body;
+      try { await saveCard(found.card); } catch(e) { console.error(e); }
+    }
+  }
+  try {
+    saveBtn.textContent = 'Saving…';
+    saveBtn.disabled = true;
+    setStatus('syncing', 'Saving…');
+    await setDoc(doc(emailsRef, email.id), email);
+    setStatus('connected', 'Synced');
+    saveInd.textContent = 'Saved';
+    saveBtn.textContent = 'Save';
+    saveBtn.disabled = false;
+    setTimeout(() => { if (saveInd) saveInd.textContent = ''; }, 2000);
+  } catch(e) {
+    console.error(e);
+    setStatus('error', 'Save failed');
+    saveInd.textContent = 'Save failed';
+    saveBtn.textContent = 'Save';
+    saveBtn.disabled = false;
+  }
 });
 
 // copyFromViewerBtn removed — editor now directly edits draft
