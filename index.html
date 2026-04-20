@@ -1241,8 +1241,9 @@ function renderEmailList() {
         renderEmailViewer();
       } else {
         selectedDraftId = email.id;
+        editorLoadedId = null; // force field repopulation on new selection
         renderEmailList();
-        renderEmailEditor();
+        renderEmailEditor(true);
       }
     });
     list.appendChild(item);
@@ -1290,7 +1291,10 @@ function renderEmailViewer() {
   body.textContent = email.body || '(empty body)';
   viewer.appendChild(meta); viewer.appendChild(body);
 }
-function renderEmailEditor() {
+// ID of the draft currently loaded into the editor fields
+let editorLoadedId = null;
+
+function renderEmailEditor(forceReload = false) {
   const empty = document.getElementById('editorEmpty');
   const form = document.getElementById('editorForm');
   const lockBanner = document.getElementById('editorLockBanner');
@@ -1302,6 +1306,7 @@ function renderEmailEditor() {
   if (!email) {
     empty.style.display = '';
     form.style.display = 'none';
+    editorLoadedId = null;
     return;
   }
 
@@ -1315,41 +1320,49 @@ function renderEmailEditor() {
   subjectInput.style.opacity = isSent ? '0.5' : '1';
   bodyArea.style.opacity = isSent ? '0.5' : '1';
 
-  // Populate without triggering input handlers
+  // Only repopulate fields + re-wire listeners when the selection actually changes.
+  // This prevents focus loss while typing — snapshot refreshes from our own saves
+  // will hit this function but bail out here without touching the DOM.
+  if (editorLoadedId === email.id && !forceReload) return;
+  editorLoadedId = email.id;
+
   subjectInput.value = email.subject || '';
   bodyArea.value = email.body || '';
 
-  // Remove old listeners by replacing elements in place
-  const newSubject = subjectInput.cloneNode(true);
-  const newBody = bodyArea.cloneNode(true);
-  subjectInput.parentNode.replaceChild(newSubject, subjectInput);
-  bodyArea.parentNode.replaceChild(newBody, bodyArea);
+  // Wire up save-back listener (safe to add multiple times since we guard with editorLoadedId)
+  subjectInput.oninput = null;
+  bodyArea.oninput = null;
 
   if (!isSent) {
     const syncBack = () => {
       clearTimeout(viewerDebounceTimer);
       saveInd.textContent = 'Unsaved…';
       viewerDebounceTimer = setTimeout(async () => {
-        email.subject = newSubject.value;
-        email.body = newBody.value;
-        // Sync back to linked pipeline card
+        // Read live values from DOM — not stale closure variables
+        const subj = document.getElementById('editorSubject').value;
+        const body = document.getElementById('editorBody').value;
+        email.subject = subj;
+        email.body = body;
         if (email.cardId) {
           const found = findCard(email.cardId);
           if (found) {
-            found.card.text = newSubject.value;
-            found.card.emailText = newBody.value;
+            found.card.text = subj;
+            found.card.emailText = body;
             try { await saveCard(found.card); } catch(e) { console.error(e); }
           }
         }
         try {
           await setDoc(doc(emailsRef, email.id), email);
-          saveInd.textContent = 'Saved';
-          setTimeout(() => { saveInd.textContent = ''; }, 1500);
-        } catch(e) { console.error(e); saveInd.textContent = 'Save failed'; }
+          document.getElementById('editorSaveInd').textContent = 'Saved';
+          setTimeout(() => {
+            const ind = document.getElementById('editorSaveInd');
+            if (ind) ind.textContent = '';
+          }, 1500);
+        } catch(e) { console.error(e); document.getElementById('editorSaveInd').textContent = 'Save failed'; }
       }, 800);
     };
-    newSubject.addEventListener('input', syncBack);
-    newBody.addEventListener('input', syncBack);
+    subjectInput.oninput = syncBack;
+    bodyArea.oninput = syncBack;
   }
 }
 
@@ -1454,10 +1467,11 @@ document.getElementById('newDraftBtn').addEventListener('click', () => {
       await setDoc(doc(emailsRef, id), record);
       setStatus('connected', 'Synced');
       selectedDraftId = id;
+      editorLoadedId = null;
       overlay.remove();
       toast('Draft created');
       renderEmailList();
-      renderEmailEditor();
+      renderEmailEditor(true);
     } catch(e) {
       console.error(e);
       setStatus('error', 'Create failed');
