@@ -443,12 +443,15 @@
         <div id="editorEmpty" class="empty-state">Select a draft from the Drafts tab to edit it here.</div>
         <div id="editorForm" style="display: none; flex-direction: column; gap: 8px; flex: 1; min-height: 0;">
           <div id="editorLockBanner" style="display:none;" class="viewer-locked">This email has been marked as sent and is locked for editing.</div>
-          <label style="font-size:12px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;">Subject (card title)</label>
-          <input type="text" id="editorSubject" placeholder="Subject…" style="font-size: 14px;">
-          <label style="font-size:12px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;">Email body</label>
-          <textarea id="editorBody" style="flex:1;min-height:200px;font-size:13px;line-height:1.6;" placeholder="Your email here…"></textarea>
+          <label style="font-size:12px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;">To</label>
+          <input type="email" id="editorTo" placeholder="recipient@example.com" style="font-size: 13px;">
+          <label style="font-size:12px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;">Subject</label>
+          <input type="text" id="editorSubject" placeholder="Subject…" style="font-size: 13px;">
+          <label style="font-size:12px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;">Body</label>
+          <textarea id="editorBody" style="flex:1;min-height:160px;font-size:13px;line-height:1.6;" placeholder="Your email here…"></textarea>
           <div class="editor-toolbar">
             <button id="saveDraftBtn" style="font-size: 12px; background: var(--color-background-info); border-color: var(--color-text-info); color: var(--color-text-info);">Save</button>
+            <button id="openOutlookBtn" style="font-size: 12px;">Open in Outlook</button>
             <button id="copyEditorBtn" style="font-size: 12px;">Copy to clipboard</button>
           </div>
         </div>
@@ -892,6 +895,18 @@ function renderDetailPanel(card) {
   });
   body.appendChild(makeField('Company', companyInput));
 
+  // Recipient email address
+  const toAddressInput = document.createElement('input');
+  toAddressInput.type = 'email';
+  toAddressInput.value = card.toAddress || '';
+  toAddressInput.placeholder = 'recipient@example.com';
+  toAddressInput.addEventListener('input', () => {
+    const found = findCard(card.id);
+    if (found) found.card.toAddress = toAddressInput.value;
+    debouncedSave();
+  });
+  body.appendChild(makeField('Recipient email', toAddressInput));
+
   // Initial email outreach date
   const outreachInput = document.createElement('input');
   outreachInput.type = 'date';
@@ -1002,6 +1017,7 @@ async function pushCardToTemplates(cardId) {
     cardId: cardId,
     filename: '',
     subject: card.text || '(untitled)',
+    toAddress: card.toAddress || '',
     from: '',
     to: '',
     cc: '',
@@ -1331,6 +1347,10 @@ function renderEmailEditor(forceReload = false) {
   if (editorLoadedId === email.id && !forceReload) return;
   editorLoadedId = email.id;
 
+  const toInput = document.getElementById('editorTo');
+  toInput.value = email.toAddress || '';
+  toInput.disabled = isSent;
+  toInput.style.opacity = isSent ? '0.5' : '1';
   subjectInput.value = email.subject || '';
   bodyArea.value = email.body || '';
 }
@@ -1513,10 +1533,12 @@ document.getElementById('saveDraftBtn').addEventListener('click', async () => {
   if (!selectedDraftId) return;
   const email = emails.find(e => e.id === selectedDraftId);
   if (!email) return;
+  const to = document.getElementById('editorTo').value;
   const subj = document.getElementById('editorSubject').value;
   const body = document.getElementById('editorBody').value;
   const saveInd = document.getElementById('editorSaveInd');
   const saveBtn = document.getElementById('saveDraftBtn');
+  email.toAddress = to;
   email.subject = subj;
   email.body = body;
   // Sync back to linked pipeline card
@@ -1548,12 +1570,21 @@ document.getElementById('saveDraftBtn').addEventListener('click', async () => {
 });
 
 // copyFromViewerBtn removed — editor now directly edits draft
-document.getElementById('copyEditorBtn').addEventListener('click',async()=>{
-  const subjectEl = document.getElementById('editorSubject');
-  const bodyEl = document.getElementById('editorBody');
-  const subject = subjectEl ? subjectEl.value : '';
-  const body = bodyEl ? bodyEl.value : '';
-  const combined=(subject?'Subject: '+subject+'\n\n':'')+body;
+document.getElementById('openOutlookBtn').addEventListener('click', () => {
+  const to = document.getElementById('editorTo').value.trim();
+  const subject = document.getElementById('editorSubject').value.trim();
+  const body = document.getElementById('editorBody').value.trim();
+  const mailto = 'mailto:' + encodeURIComponent(to)
+    + '?subject=' + encodeURIComponent(subject)
+    + '&body=' + encodeURIComponent(body);
+  window.location.href = mailto;
+});
+
+document.getElementById('copyEditorBtn').addEventListener('click', async () => {
+  const to = document.getElementById('editorTo').value;
+  const subject = document.getElementById('editorSubject').value;
+  const body = document.getElementById('editorBody').value;
+  const combined = (to ? 'To: ' + to + '\n' : '') + (subject ? 'Subject: ' + subject + '\n\n' : '') + body;
   try { await navigator.clipboard.writeText(combined); toast('Copied to clipboard'); }
   catch { toast('Copy failed — try selecting manually'); }
 });
