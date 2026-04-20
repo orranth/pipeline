@@ -779,6 +779,14 @@ function renderCard(card, colId) {
       bottomRow.appendChild(co);
     }
 
+    if (colId === 'sent' && card.outreachDate) {
+      const dateSpan = document.createElement('span');
+      const d = new Date(card.outreachDate + 'T12:00:00');
+      dateSpan.style.cssText = 'font-size: 11px; color: var(--color-text-tertiary); white-space: nowrap; margin-left: auto;';
+      dateSpan.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      bottomRow.appendChild(dateSpan);
+    }
+
     el.appendChild(bottomRow);
 
     // Click card body to open detail panel
@@ -862,6 +870,17 @@ function renderDetailPanel(card) {
     debouncedSave();
   });
   body.appendChild(makeField('Company', companyInput));
+
+  // Initial email outreach date
+  const outreachInput = document.createElement('input');
+  outreachInput.type = 'date';
+  outreachInput.value = card.outreachDate || '';
+  outreachInput.addEventListener('input', () => {
+    const found = findCard(card.id);
+    if (found) found.card.outreachDate = outreachInput.value;
+    debouncedSave();
+  });
+  body.appendChild(makeField('Initial email outreach', outreachInput));
 
   // Save indicator
   const saveInd = document.createElement('div');
