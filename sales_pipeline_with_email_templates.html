@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Pipeline</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pipeline">
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f4ee;
+    --color-background-tertiary: #ebeae3;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
+    --color-text-info: #185FA5;
+    --color-text-success: #0F6E56;
+    --color-text-warning: #854F0B;
+    --color-text-danger: #A32D2D;
+    --color-border-tertiary: rgba(0,0,0,0.15);
+    --color-border-secondary: rgba(0,0,0,0.3);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1f1f1d;
+      --color-background-secondary: #2a2a28;
+      --color-background-tertiary: #353532;
+      --color-text-primary: #f0efe9;
+      --color-text-secondary: #B4B2A9;
+      --color-text-tertiary: #888780;
+      --color-text-info: #B5D4F4;
+      --color-text-success: #9FE1CB;
+      --color-text-warning: #FAC775;
+      --color-text-danger: #F7C1C1;
+      --color-border-tertiary: rgba(255,255,255,0.15);
+      --color-border-secondary: rgba(255,255,255,0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    margin: 0;
+    padding: 1.5rem 1rem;
+    min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  button {
+    font-family: var(--font-sans);
+    background: transparent;
+    border: 0.5px solid var(--color-border-secondary);
+    color: var(--color-text-primary);
+    padding: 6px 12px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: background 0.15s, transform 0.05s;
+  }
+  button:hover { background: var(--color-background-secondary); }
+  button:active { transform: scale(0.98); }
+  input, textarea {
+    font-family: inherit;
+    color: inherit;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 10px;
+  }
+  textarea { resize: vertical; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 1rem; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .tab {
+    padding: 10px 16px; font-size: 14px; cursor: pointer;
+    border: none; background: transparent; color: var(--color-text-secondary);
+    border-bottom: 2px solid transparent; border-radius: 0;
+  }
+  .tab.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); font-weight: 500; }
+  .tab:hover { background: transparent; color: var(--color-text-primary); }
+
+  .status-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--color-text-tertiary); margin-right: 6px; vertical-align: middle;
+  }
+  .status-dot.connected { background: #1D9E75; }
+  .status-dot.syncing { background: #EF9F27; animation: pulse 1s infinite; }
+  .status-dot.error { background: #E24B4A; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .email-workspace {
+    display: grid;
+    grid-template-columns: 260px 1fr 1fr;
+    gap: 12px;
+    height: calc(100vh - 180px);
+    min-height: 500px;
+  }
+  .panel {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .panel-header {
+    padding: 10px 12px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .panel-body {
+    padding: 12px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    min-height: 0;
+  }
+  .email-item {
+    padding: 10px 12px;
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    margin-bottom: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: border-color 0.15s;
+  }
+  .email-item:hover { border-color: var(--color-border-secondary); }
+  .email-item.selected { border-color: var(--color-text-info); }
+  .email-item .subject { font-weight: 500; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px; }
+  .email-item .from { font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .email-item .date { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+  .drop-zone {
+    border: 1.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .drop-zone:hover, .drop-zone.dragover { background: var(--color-background-tertiary); border-color: var(--color-text-info); color: var(--color-text-primary); }
+
+  .email-meta { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 12px; line-height: 1.6; padding-bottom: 10px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .email-meta strong { color: var(--color-text-primary); font-weight: 500; margin-right: 4px; }
+  .email-body {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--color-text-primary);
+  }
+
+  .editor-area { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+  .editor-area textarea { flex: 1; min-height: 200px; font-size: 13px; line-height: 1.6; }
+  .editor-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .empty-state { color: var(--color-text-tertiary); font-size: 13px; padding: 20px 12px; text-align: center; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--color-text-primary); color: var(--color-background-primary);
+    padding: 8px 16px; border-radius: var(--border-radius-md); font-size: 13px;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 0.9; }
+
+  @media (max-width: 1100px) {
+    .email-workspace { grid-template-columns: 220px 1fr; grid-template-rows: 1fr 1fr; }
+    .email-workspace .panel:first-child { grid-row: 1 / 3; }
+  }
+  @media (max-width: 768px) {
+    body { padding: 1rem 0.75rem; }
+    #board { grid-template-columns: 1fr !important; }
+    .email-workspace { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
+    .email-workspace .panel:first-child { grid-row: auto; }
+    .panel { max-height: 60vh; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+<h2 class="sr-only">Sales pipeline and email templates workspace, synced across devices.</h2>
+
+<div class="tabs" role="tablist">
+  <button class="tab active" data-tab="pipeline" role="tab">Pipeline</button>
+  <button class="tab" data-tab="email" role="tab">Email templates</button>
+  <span style="margin-left: auto; font-size: 12px; color: var(--color-text-tertiary); align-self: center;">
+    <span id="statusDot" class="status-dot"></span><span id="statusText">Connecting…</span>
+  </span>
+</div>
+
+<section id="tab-pipeline" class="tab-content">
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 12px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <span style="font-size: 18px; font-weight: 500;">Pipeline</span>
+      <span id="totalCount" style="font-size: 13px; color: var(--color-text-secondary);"></span>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button id="seedBtn" style="font-size: 13px;">Load starter data</button>
+      <button id="clearBtn" style="font-size: 13px;">Clear all</button>
+    </div>
+  </div>
+  <div id="board" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;"></div>
+  <p style="font-size: 12px; color: var(--color-text-tertiary); margin-top: 12px;">Click text to edit · drag cards between columns · ✎ edit · ✓ done · ● color · × delete</p>
+</section>
+
+<section id="tab-email" class="tab-content" style="display: none;">
+  <div class="email-workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <span>Inbox <span id="emailCount" style="color: var(--color-text-tertiary); font-weight: 400; text-transform: none;"></span></span>
+      </div>
+      <div class="panel-body">
+        <div class="drop-zone" id="dropZone">
+          <div>Drop .eml files here<br>or click to upload</div>
+          <input type="file" id="fileInput" accept=".eml,.txt,message/rfc822" multiple style="display: none;">
+        </div>
+        <div id="emailList"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span>Viewer</span>
+        <button id="deleteEmailBtn" style="font-size: 12px; padding: 4px 10px; display: none;">Delete</button>
+      </div>
+      <div class="panel-body" id="emailViewer">
+        <div class="empty-state">Select an email from the inbox to view it here.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span>Editor</span>
+        <span style="font-size: 11px; color: var(--color-text-tertiary); font-weight: 400; text-transform: none;">Not synced</span>
+      </div>
+      <div class="panel-body editor-area">
+        <input type="text" id="editorSubject" placeholder="Subject…" style="font-size: 14px;">
+        <textarea id="editorBody" placeholder="Compose here. Select text in the viewer and click &quot;Copy selection from viewer&quot; to pull snippets over."></textarea>
+        <div class="editor-toolbar">
+          <button id="copyFromViewerBtn" style="font-size: 12px;">Copy selection from viewer</button>
+          <button id="copyEditorBtn" style="font-size: 12px;">Copy all to clipboard</button>
+          <button id="clearEditorBtn" style="font-size: 12px;">Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, collection, doc, setDoc, deleteDoc,
+  onSnapshot, writeBatch, query
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC_wehJhOVdo04r-z0-oS0mXYcDLfuA2Lg",
+  authDomain: "wpo-pipeline-board.firebaseapp.com",
+  databaseURL: "https://wpo-pipeline-board-default-rtdb.firebaseio.com",
+  projectId: "wpo-pipeline-board",
+  storageBucket: "wpo-pipeline-board.firebasestorage.app",
+  messagingSenderId: "28826988303",
+  appId: "1:28826988303:web:f084a5ee478c512efb587a"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const cardsRef = collection(db, "pipeline_cards");
+const emailsRef = collection(db, "email_templates");
+
+function setStatus(kind, text) {
+  document.getElementById('statusDot').className = 'status-dot ' + kind;
+  document.getElementById('statusText').textContent = text;
+}
+
+function toast(message) {
+  const t = document.getElementById('toast');
+  t.textContent = message;
+  t.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    document.getElementById('tab-' + btn.dataset.tab).style.display = '';
+  });
+});
+
+// =====================================================
+// PIPELINE
+// =====================================================
+const COLUMNS = [
+  { id: 'queue',    title: 'Queue',             color: 'var(--color-text-primary)' },
+  { id: 'sent',     title: 'Sent',              color: 'var(--color-text-success)' },
+  { id: 'contact',  title: 'In contact',        color: 'var(--color-text-info)' },
+  { id: 'meeting',  title: 'Meeting scheduled', color: 'var(--color-text-warning)' }
+];
+
+const STARTER_DATA = [
+  { col: 'queue',   text: 'Will Bartholomew', done: true,  color: 'neutral', order: 0 },
+  { col: 'queue',   text: 'Thompson Paine',   done: false, color: 'neutral', order: 1 },
+  { col: 'queue',   text: 'Chuck Lovelace',   done: false, color: 'neutral', order: 2 },
+  { col: 'queue',   text: 'Ali Alford',       done: false, color: 'neutral', order: 3 },
+  { col: 'queue',   text: 'Brad Graner',      done: false, color: 'neutral', order: 4 },
+  { col: 'queue',   text: 'John Graves',      done: false, color: 'neutral', order: 5 },
+  { col: 'queue',   text: 'Josh Ford (idea)', done: false, color: 'neutral', order: 6 },
+  { col: 'sent',    text: 'Jason Rose (Clearsense)', done: false, color: 'neutral', order: 0 },
+  { col: 'sent',    text: 'Frontline Health',        done: true,  color: 'neutral', order: 1 },
+  { col: 'sent',    text: 'Will Bartholomew',        done: false, color: 'neutral', order: 2 },
+  { col: 'sent',    text: 'Charlie Pleas',           done: false, color: 'neutral', order: 3 },
+  { col: 'sent',    text: 'David Greer',             done: false, color: 'neutral', order: 4 },
+  { col: 'contact', text: 'Nolan Young (UnityAI)',   done: true,  color: 'neutral', order: 0 },
+  { col: 'meeting', text: 'Rob Metcalf — Fri 4/?',   done: false, color: 'neutral', order: 0 },
+  { col: 'meeting', text: 'Ted Davis — Mon 4/20',    done: false, color: 'neutral', order: 1 },
+  { col: 'meeting', text: 'UnityAI — Tues 4/22',     done: false, color: 'neutral', order: 2 },
+  { col: 'meeting', text: 'FrontlineHCP — Wed 4/23', done: false, color: 'neutral', order: 3 }
+];
+
+const PALETTE = [
+  { id: 'neutral', label: 'Neutral', fg: 'var(--color-text-secondary)', swatch: '#888780' },
+  { id: 'red',     label: 'Red',     fg: 'var(--color-text-danger)',    swatch: '#A32D2D' },
+  { id: 'amber',   label: 'Amber',   fg: 'var(--color-text-warning)',   swatch: '#BA7517' },
+  { id: 'green',   label: 'Green',   fg: 'var(--color-text-success)',   swatch: '#0F6E56' },
+  { id: 'blue',    label: 'Blue',    fg: 'var(--color-text-info)',      swatch: '#185FA5' }
+];
+const colorOf = (id) => PALETTE.find(p => p.id === id) || PALETTE[0];
+
+let pipelineState = { queue: [], sent: [], contact: [], meeting: [] };
+let dragData = null;
+let openColorPicker = null;
+let editingId = null;
+
+function newId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+function findCard(cardId) {
+  for (const col of COLUMNS) {
+    const idx = pipelineState[col.id].findIndex(c => c.id === cardId);
+    if (idx !== -1) return { col: col.id, idx, card: pipelineState[col.id][idx] };
+  }
+  return null;
+}
+
+async function saveCard(card) {
+  try { setStatus('syncing', 'Saving…'); await setDoc(doc(cardsRef, card.id), card); }
+  catch (e) { console.error('Save failed', e); setStatus('error', 'Save failed'); }
+}
+
+async function deleteCardRemote(cardId) {
+  try { setStatus('syncing', 'Saving…'); await deleteDoc(doc(cardsRef, cardId)); }
+  catch (e) { console.error('Delete failed', e); setStatus('error', 'Delete failed'); }
+}
+
+async function moveCard(cardId, toCol) {
+  const found = findCard(cardId);
+  if (!found) return;
+  const card = { ...found.card, col: toCol, order: pipelineState[toCol].length };
+  await saveCard(card);
+}
+
+onSnapshot(query(cardsRef), (snapshot) => {
+  const all = [];
+  snapshot.forEach(docSnap => all.push({ id: docSnap.id, ...docSnap.data() }));
+  const next = { queue: [], sent: [], contact: [], meeting: [] };
+  for (const card of all) {
+    const col = card.col && next[card.col] ? card.col : 'queue';
+    next[col].push(card);
+  }
+  for (const col of COLUMNS) next[col.id].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  pipelineState = next;
+  setStatus('connected', 'Synced');
+  renderBoard();
+}, (err) => { console.error('Snapshot error', err); setStatus('error', 'Connection error'); });
+
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  openColorPicker = null;
+
+  let total = 0, active = 0;
+  for (const col of COLUMNS) {
+    total += pipelineState[col.id].length;
+    active += pipelineState[col.id].filter(c => !c.done).length;
+  }
+  document.getElementById('totalCount').textContent = active + ' active · ' + total + ' total';
+
+  for (const col of COLUMNS) {
+    const colEl = document.createElement('div');
+    colEl.style.cssText = 'background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 12px; min-height: 240px; display: flex; flex-direction: column; gap: 8px;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;';
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size: 13px; font-weight: 500; color: ' + col.color + '; text-transform: uppercase; letter-spacing: 0.5px;';
+    title.textContent = col.title;
+    const count = document.createElement('span');
+    count.style.cssText = 'font-size: 12px; color: var(--color-text-tertiary);';
+    count.textContent = pipelineState[col.id].length;
+    header.appendChild(title);
+    header.appendChild(count);
+    colEl.appendChild(header);
+
+    for (const card of pipelineState[col.id]) colEl.appendChild(renderCard(card, col.id));
+
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ Add';
+    addBtn.style.cssText = 'font-size: 12px; padding: 6px 10px; margin-top: auto; align-self: flex-start;';
+    addBtn.addEventListener('click', async () => {
+      const id = newId();
+      const card = { id, col: col.id, text: '', done: false, color: 'neutral', order: pipelineState[col.id].length };
+      editingId = id;
+      pipelineState[col.id].push(card);
+      renderBoard();
+      await saveCard(card);
+    });
+    colEl.appendChild(addBtn);
+
+    colEl.addEventListener('dragover', (e) => { e.preventDefault(); colEl.style.background = 'var(--color-background-tertiary)'; });
+    colEl.addEventListener('dragleave', () => { colEl.style.background = 'var(--color-background-secondary)'; });
+    colEl.addEventListener('drop', (e) => { e.preventDefault(); colEl.style.background = 'var(--color-background-secondary)'; if (dragData) moveCard(dragData, col.id); });
+
+    board.appendChild(colEl);
+  }
+}
+
+function renderCard(card, colId) {
+  const colors = colorOf(card.color);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position: relative;';
+
+  const el = document.createElement('div');
+  el.draggable = (editingId !== card.id);
+  el.style.cssText = 'background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-left: 3px solid ' + colors.swatch + '; border-radius: var(--border-radius-md); padding: 8px 10px; cursor: grab; display: flex; align-items: center; gap: 8px; font-size: 13px;';
+
+  el.addEventListener('dragstart', (e) => { if (editingId === card.id) { e.preventDefault(); return; } dragData = card.id; el.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; });
+  el.addEventListener('dragend', () => { el.style.opacity = '1'; dragData = null; });
+
+  if (editingId === card.id) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = card.text;
+    input.placeholder = 'Type and press Enter…';
+    input.style.cssText = 'flex: 1; font: inherit; color: ' + colors.fg + '; background: transparent; border: none; outline: none; padding: 0; min-width: 0;';
+    input.addEventListener('click', e => e.stopPropagation());
+    const commit = async () => {
+      const v = input.value.trim();
+      editingId = null;
+      if (v) { card.text = v; await saveCard(card); }
+      else { await deleteCardRemote(card.id); }
+    };
+    const cancel = async () => {
+      editingId = null;
+      if (!card.text) await deleteCardRemote(card.id);
+      else renderBoard();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+    input.addEventListener('blur', commit);
+    el.appendChild(input);
+    setTimeout(() => { input.focus(); input.select(); }, 0);
+  } else {
+    const text = document.createElement('span');
+    text.style.cssText = 'flex: 1; color: ' + colors.fg + '; cursor: text; min-width: 0; overflow: hidden; text-overflow: ellipsis;' + (card.done ? ' text-decoration: line-through; opacity: 0.5;' : '');
+    text.textContent = card.text;
+    text.title = 'Click to edit';
+    text.addEventListener('click', (e) => { e.stopPropagation(); editingId = card.id; renderBoard(); });
+    el.appendChild(text);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display: flex; gap: 2px; align-items: center;';
+    const editBtn = miniBtn('✎', 'Edit', () => { editingId = card.id; renderBoard(); });
+    const doneBtn = miniBtn(card.done ? '↺' : '✓', card.done ? 'Mark active' : 'Mark done', async () => { card.done = !card.done; await saveCard(card); });
+    const colorBtn = document.createElement('button');
+    colorBtn.title = 'Change color';
+    colorBtn.style.cssText = 'background: ' + colors.swatch + '; border: 1px solid var(--color-border-tertiary); width: 14px; height: 14px; padding: 0; border-radius: 50%; cursor: pointer;';
+    colorBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePicker(wrap, card); });
+    const delBtn = miniBtn('×', 'Delete', async () => { await deleteCardRemote(card.id); });
+    actions.appendChild(editBtn);
+    actions.appendChild(doneBtn);
+    actions.appendChild(colorBtn);
+    actions.appendChild(delBtn);
+    el.appendChild(actions);
+  }
+
+  wrap.appendChild(el);
+  return wrap;
+}
+
+function togglePicker(wrap, card) {
+  const existing = wrap.querySelector('.color-picker');
+  if (existing) { existing.remove(); openColorPicker = null; return; }
+  if (openColorPicker) openColorPicker.remove();
+  const picker = document.createElement('div');
+  picker.className = 'color-picker';
+  picker.style.cssText = 'position: absolute; top: 100%; right: 4px; margin-top: 4px; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 6px; display: flex; gap: 6px; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.08);';
+  PALETTE.forEach(p => {
+    const sw = document.createElement('button');
+    sw.title = p.label;
+    const isActive = p.id === card.color;
+    sw.style.cssText = 'background: ' + p.swatch + '; border: ' + (isActive ? '2px solid var(--color-text-primary)' : '1px solid var(--color-border-tertiary)') + '; width: 18px; height: 18px; padding: 0; border-radius: 50%; cursor: pointer;';
+    sw.addEventListener('click', async (e) => { e.stopPropagation(); card.color = p.id; await saveCard(card); });
+    picker.appendChild(sw);
+  });
+  wrap.appendChild(picker);
+  openColorPicker = picker;
+}
+
+document.addEventListener('click', () => { if (openColorPicker) { openColorPicker.remove(); openColorPicker = null; } });
+
+function miniBtn(label, title, onClick) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.title = title;
+  b.style.cssText = 'background: transparent; border: none; padding: 2px 6px; font-size: 13px; cursor: pointer; line-height: 1; color: var(--color-text-secondary); border-radius: var(--border-radius-md);';
+  b.addEventListener('mouseenter', () => b.style.background = 'var(--color-background-secondary)');
+  b.addEventListener('mouseleave', () => b.style.background = 'transparent');
+  b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+  return b;
+}
+
+document.getElementById('seedBtn').addEventListener('click', async () => {
+  if (!confirm('Load the original whiteboard contents? This will add them alongside any existing cards.')) return;
+  try {
+    setStatus('syncing', 'Loading starter data…');
+    const batch = writeBatch(db);
+    for (const item of STARTER_DATA) {
+      const id = newId();
+      batch.set(doc(cardsRef, id), { id, ...item });
+    }
+    await batch.commit();
+  } catch (e) { console.error(e); setStatus('error', 'Failed to seed'); }
+});
+
+document.getElementById('clearBtn').addEventListener('click', async () => {
+  if (!confirm('Delete ALL cards from cloud? This cannot be undone.')) return;
+  try {
+    setStatus('syncing', 'Clearing…');
+    const batch = writeBatch(db);
+    for (const col of COLUMNS) for (const c of pipelineState[col.id]) batch.delete(doc(cardsRef, c.id));
+    await batch.commit();
+  } catch (e) { console.error(e); setStatus('error', 'Clear failed'); }
+});
+
+renderBoard();
+
+// =====================================================
+// EMAIL TEMPLATES — rewritten parser
+// =====================================================
+
+let emails = [];
+let selectedEmailId = null;
+
+// --- Parser utilities ---
+
+// Split a MIME message (or part) into {rawHeaders, body}
+function splitHeadersBody(raw) {
+  const match = raw.match(/\r?\n\r?\n/);
+  if (!match) return { rawHeaders: raw, body: '' };
+  const idx = match.index;
+  return {
+    rawHeaders: raw.slice(0, idx),
+    body: raw.slice(idx + match[0].length)
+  };
+}
+
+// Parse headers, handling folded continuation lines (lines starting with whitespace)
+function parseHeaders(rawHeaders) {
+  // Unfold: join continuation lines
+  const unfolded = rawHeaders.replace(/\r?\n([ \t])/g, ' ');
+  const headers = {};
+  unfolded.split(/\r?\n/).forEach(line => {
+    const m = line.match(/^([^:]+):\s*(.*)$/);
+    if (m) headers[m[1].trim().toLowerCase()] = m[2];
+  });
+  return headers;
+}
+
+// Parse a Content-Type header value: returns { type, params }
+function parseContentType(value) {
+  if (!value) return { type: 'text/plain', params: {} };
+  const parts = value.split(';').map(s => s.trim());
+  const type = parts.shift().toLowerCase();
+  const params = {};
+  for (const p of parts) {
+    const m = p.match(/^([^=]+)=(.*)$/);
+    if (m) {
+      let v = m[2].trim();
+      if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+      params[m[1].trim().toLowerCase()] = v;
+    }
+  }
+  return { type, params };
+}
+
+// Decode a base64 string to UTF-8
+function decodeBase64Utf8(s) {
+  try {
+    const clean = s.replace(/\s+/g, '');
+    const binary = atob(clean);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  } catch (e) {
+    console.warn('base64 decode failed', e);
+    return s;
+  }
+}
+
+// Decode quoted-printable to UTF-8
+function decodeQpUtf8(s) {
+  // Remove soft line breaks, then decode =XX sequences to bytes, then UTF-8 decode the bytes
+  const noSoft = s.replace(/=\r?\n/g, '');
+  const bytes = [];
+  for (let i = 0; i < noSoft.length; i++) {
+    if (noSoft[i] === '=' && i + 2 < noSoft.length && /[0-9A-Fa-f]{2}/.test(noSoft.substr(i + 1, 2))) {
+      bytes.push(parseInt(noSoft.substr(i + 1, 2), 16));
+      i += 2;
+    } else {
+      bytes.push(noSoft.charCodeAt(i));
+    }
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(bytes));
+  } catch {
+    return String.fromCharCode(...bytes);
+  }
+}
+
+// Decode a body based on Content-Transfer-Encoding
+function decodePartBody(body, encoding) {
+  const enc = (encoding || '').toLowerCase().trim();
+  if (enc === 'base64') return decodeBase64Utf8(body);
+  if (enc === 'quoted-printable') return decodeQpUtf8(body);
+  // 7bit, 8bit, binary, or none — return as-is
+  return body;
+}
+
+// Decode RFC 2047 encoded-words in headers (e.g. =?UTF-8?Q?=E2=9C=93?=)
+function decodeHeaderValue(s) {
+  if (!s) return '';
+  return s.replace(/=\?([^?]+)\?([QqBb])\?([^?]*)\?=(\s+(?==\?))?/g, (_, charset, enc, text) => {
+    try {
+      if (enc.toUpperCase() === 'Q') {
+        return decodeQpUtf8(text.replace(/_/g, ' '));
+      } else {
+        return decodeBase64Utf8(text);
+      }
+    } catch { return text; }
+  });
+}
+
+// Recursively walk a MIME part tree, collecting text parts
+// Returns { text, html } — whichever is found (text preferred)
+function extractTextFromPart(part) {
+  const { rawHeaders, body } = splitHeadersBody(part);
+  const headers = parseHeaders(rawHeaders);
+  const ct = parseContentType(headers['content-type']);
+  const encoding = headers['content-transfer-encoding'];
+
+  if (ct.type.startsWith('multipart/')) {
+    const boundary = ct.params.boundary;
+    if (!boundary) return { text: '', html: '' };
+    // Split by boundary. Each boundary line is "--BOUNDARY" and the terminator is "--BOUNDARY--"
+    const sep = '--' + boundary;
+    const rawParts = body.split(new RegExp('\\r?\\n?' + escapeRegex(sep)));
+    // The first element before the first boundary is preamble — ignore.
+    // Elements after the final "--" are epilogue — ignore.
+    let text = '', html = '';
+    for (let i = 1; i < rawParts.length; i++) {
+      let p = rawParts[i];
+      // If this is the terminating boundary ("--BOUNDARY--"), stop.
+      if (p.startsWith('--')) break;
+      // Trim leading CRLF after boundary
+      p = p.replace(/^\r?\n/, '');
+      const result = extractTextFromPart(p);
+      if (result.text && !text) text = result.text;
+      if (result.html && !html) html = result.html;
+      // For multipart/alternative prefer text/plain; for multipart/mixed take first text
+      if (text) break;
+    }
+    return { text, html };
+  }
+
+  const decoded = decodePartBody(body, encoding);
+  if (ct.type === 'text/plain') return { text: decoded, html: '' };
+  if (ct.type === 'text/html') return { text: '', html: decoded };
+  // Non-text part (attachment, etc.) — skip
+  return { text: '', html: '' };
+}
+
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function stripHtml(html) {
+  // Remove <style> and <script> blocks entirely
+  let cleaned = html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '');
+  // Convert <br>, <p>, </p>, </div> to line breaks
+  cleaned = cleaned.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n');
+  // Use DOM to strip remaining tags and decode entities
+  const tmp = document.createElement('div');
+  tmp.innerHTML = cleaned;
+  let text = tmp.textContent || tmp.innerText || '';
+  // Collapse 3+ newlines to 2
+  text = text.replace(/\n{3,}/g, '\n\n').trim();
+  return text;
+}
+
+function parseEml(rawText) {
+  const { rawHeaders, body } = splitHeadersBody(rawText);
+  const headers = parseHeaders(rawHeaders);
+  const ct = parseContentType(headers['content-type']);
+  const encoding = headers['content-transfer-encoding'];
+
+  let bodyText = '';
+  if (ct.type.startsWith('multipart/')) {
+    const result = extractTextFromPart(rawText);
+    bodyText = result.text || (result.html ? stripHtml(result.html) : '');
+  } else {
+    const decoded = decodePartBody(body, encoding);
+    bodyText = ct.type === 'text/html' ? stripHtml(decoded) : decoded;
+  }
+
+  return {
+    subject: decodeHeaderValue(headers['subject'] || '(no subject)'),
+    from: decodeHeaderValue(headers['from'] || ''),
+    to: decodeHeaderValue(headers['to'] || ''),
+    cc: decodeHeaderValue(headers['cc'] || ''),
+    date: headers['date'] || '',
+    body: (bodyText || '').trim()
+  };
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function renderEmailList() {
+  const list = document.getElementById('emailList');
+  list.innerHTML = '';
+  document.getElementById('emailCount').textContent = emails.length ? `(${emails.length})` : '';
+  if (!emails.length) {
+    list.innerHTML = '<div class="empty-state" style="padding: 12px 4px;">No emails yet.<br>Drop .eml files above.</div>';
+    return;
+  }
+  const sorted = [...emails].sort((a, b) => {
+    const da = new Date(a.date || 0).getTime() || 0;
+    const dbb = new Date(b.date || 0).getTime() || 0;
+    return dbb - da;
+  });
+  for (const email of sorted) {
+    const item = document.createElement('div');
+    item.className = 'email-item' + (email.id === selectedEmailId ? ' selected' : '');
+    const subj = document.createElement('div'); subj.className = 'subject'; subj.textContent = email.subject || '(no subject)';
+    const from = document.createElement('div'); from.className = 'from'; from.textContent = email.from || '';
+    const date = document.createElement('div'); date.className = 'date'; date.textContent = formatDate(email.date);
+    item.appendChild(subj); item.appendChild(from); item.appendChild(date);
+    item.addEventListener('click', () => { selectedEmailId = email.id; renderEmailList(); renderEmailViewer(); });
+    list.appendChild(item);
+  }
+}
+
+function renderEmailViewer() {
+  const viewer = document.getElementById('emailViewer');
+  const deleteBtn = document.getElementById('deleteEmailBtn');
+  const email = emails.find(e => e.id === selectedEmailId);
+  if (!email) {
+    viewer.innerHTML = '<div class="empty-state">Select an email from the inbox to view it here.</div>';
+    deleteBtn.style.display = 'none';
+    return;
+  }
+  deleteBtn.style.display = '';
+
+  const meta = document.createElement('div');
+  meta.className = 'email-meta';
+  const addMeta = (label, value) => {
+    if (!value) return;
+    const row = document.createElement('div');
+    const strong = document.createElement('strong'); strong.textContent = label + ':';
+    row.appendChild(strong);
+    row.appendChild(document.createTextNode(' ' + value));
+    meta.appendChild(row);
+  };
+  addMeta('Subject', email.subject);
+  addMeta('From', email.from);
+  addMeta('To', email.to);
+  addMeta('Cc', email.cc);
+  addMeta('Date', formatDate(email.date));
+
+  const body = document.createElement('div');
+  body.className = 'email-body';
+  body.textContent = email.body || '(empty body)';
+
+  viewer.innerHTML = '';
+  viewer.appendChild(meta);
+  viewer.appendChild(body);
+}
+
+onSnapshot(query(emailsRef), (snapshot) => {
+  const all = [];
+  snapshot.forEach(docSnap => all.push({ id: docSnap.id, ...docSnap.data() }));
+  emails = all;
+  renderEmailList();
+  renderEmailViewer();
+}, (err) => { console.error('Email snapshot error', err); });
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList);
+  if (!files.length) return;
+  setStatus('syncing', `Uploading ${files.length} file${files.length > 1 ? 's' : ''}…`);
+  let ok = 0, fail = 0;
+  for (const file of files) {
+    try {
+      const text = await file.text();
+      const parsed = parseEml(text);
+      const id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      const record = { id, filename: file.name, ...parsed, uploadedAt: Date.now() };
+
+      const size = new Blob([JSON.stringify(record)]).size;
+      if (size > 900000) {
+        const overage = size - 900000;
+        record.body = (record.body || '').slice(0, Math.max((record.body || '').length - overage - 200, 10000)) + '\n\n[truncated — file too large for cloud storage]';
+      }
+      await setDoc(doc(emailsRef, id), record);
+      ok++;
+    } catch (e) {
+      console.error('Upload failed for', file.name, e);
+      fail++;
+    }
+  }
+  fileInput.value = '';
+  setStatus('connected', 'Synced');
+  if (fail) toast(`${ok} uploaded, ${fail} failed`);
+  else toast(`${ok} email${ok > 1 ? 's' : ''} uploaded`);
+}
+
+document.getElementById('deleteEmailBtn').addEventListener('click', async () => {
+  if (!selectedEmailId) return;
+  if (!confirm('Delete this email?')) return;
+  try {
+    setStatus('syncing', 'Deleting…');
+    await deleteDoc(doc(emailsRef, selectedEmailId));
+    selectedEmailId = null;
+    setStatus('connected', 'Synced');
+  } catch (e) { console.error(e); setStatus('error', 'Delete failed'); }
+});
+
+document.getElementById('copyFromViewerBtn').addEventListener('click', () => {
+  const sel = window.getSelection().toString();
+  if (!sel) { toast('Select text in the viewer first'); return; }
+  const editor = document.getElementById('editorBody');
+  const cur = editor.value;
+  const start = editor.selectionStart ?? cur.length;
+  editor.value = cur.slice(0, start) + sel + cur.slice(start);
+  editor.focus();
+  toast('Copied to editor');
+});
+
+document.getElementById('copyEditorBtn').addEventListener('click', async () => {
+  const subject = document.getElementById('editorSubject').value;
+  const body = document.getElementById('editorBody').value;
+  const combined = (subject ? 'Subject: ' + subject + '\n\n' : '') + body;
+  try { await navigator.clipboard.writeText(combined); toast('Copied to clipboard'); }
+  catch { toast('Copy failed — try selecting manually'); }
+});
+
+document.getElementById('clearEditorBtn').addEventListener('click', () => {
+  if (!document.getElementById('editorBody').value && !document.getElementById('editorSubject').value) return;
+  if (!confirm('Clear the editor?')) return;
+  document.getElementById('editorSubject').value = '';
+  document.getElementById('editorBody').value = '';
+});
+</script>
+</body>
+</html>
