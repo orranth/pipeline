@@ -511,11 +511,17 @@ document.querySelectorAll('.tab').forEach(btn => {
 // PIPELINE
 // =====================================================
 const COLUMNS = [
-  { id: 'queue',    title: 'Queue',             color: 'var(--color-text-primary)' },
-  { id: 'sent',     title: 'Sent',              color: 'var(--color-text-success)' },
-  { id: 'contact',  title: 'In contact',        color: 'var(--color-text-info)' },
-  { id: 'meeting',  title: 'Meeting scheduled', color: 'var(--color-text-warning)' }
+  { id: 'queue',       title: 'Queue',             color: 'var(--color-text-primary)' },
+  { id: 'sent',        title: 'Sent',              color: 'var(--color-text-success)' },
+  { id: 'contact',     title: 'In contact',        color: 'var(--color-text-info)' },
+  { id: 'meeting',     title: 'Meeting scheduled', color: 'var(--color-text-warning)' },
+  { id: 'followup_me',   title: 'Follow up — Me',   color: 'var(--color-text-danger)', virtual: true },
+  { id: 'followup_them', title: 'Follow up — Them', color: 'var(--color-text-secondary)', virtual: true }
 ];
+// Columns that render as their own board column (not nested)
+const TOP_LEVEL_COLUMNS = COLUMNS.filter(c => !c.virtual);
+// Columns that render nested inside the Meeting column
+const MEETING_SUB_COLUMNS = COLUMNS.filter(c => c.virtual);
 
 const STARTER_DATA = [
   { col: 'queue',   text: 'Will Bartholomew', done: true,  color: 'neutral', order: 0 },
@@ -552,7 +558,7 @@ const EMAIL_STATUSES = [
   { id: 'sent',      label: 'Sent',      activeClass: 'active-sent',      badgeClass: 'badge-sent' }
 ];
 
-let pipelineState = { queue: [], sent: [], contact: [], meeting: [] };
+let pipelineState = { queue: [], sent: [], contact: [], meeting: [], followup_me: [], followup_them: [] };
 let dragData = null;
 let openColorPicker = null;
 let editingId = null;
@@ -606,7 +612,7 @@ window.__moveCard = moveCard;
 onSnapshot(query(cardsRef), (snapshot) => {
   const all = [];
   snapshot.forEach(docSnap => all.push({ id: docSnap.id, ...docSnap.data() }));
-  const next = { queue: [], sent: [], contact: [], meeting: [] };
+  const next = { queue: [], sent: [], contact: [], meeting: [], followup_me: [], followup_them: [] };
   for (const card of all) {
     const col = card.col && next[card.col] ? card.col : 'queue';
     next[col].push(card);
@@ -632,30 +638,34 @@ function renderBoard() {
     total += pipelineState[col.id].length;
     active += pipelineState[col.id].filter(c => !c.done).length;
   }
+  // Subtract followup counts from totals (they're not pipeline stage cards)
+  for (const col of MEETING_SUB_COLUMNS) {
+    total -= pipelineState[col.id].length;
+    active -= pipelineState[col.id].filter(c => !c.done).length;
+  }
   document.getElementById('totalCount').textContent = active + ' active · ' + total + ' total';
 
-  // Score = queue×1 + sent×1.5 + contact×2 + meeting×3 (all cards)
+  // Score = queue×-2 + sent×1.5 + contact×2 + meeting×3 (top-level cols only)
   const WEIGHTS = { queue: -2, sent: 1.5, contact: 2, meeting: 3 };
-  const score = COLUMNS.reduce((sum, col) => sum + pipelineState[col.id].length * WEIGHTS[col.id], 0);
+  const score = TOP_LEVEL_COLUMNS.reduce((sum, col) => sum + (pipelineState[col.id].length * (WEIGHTS[col.id] || 0)), 0);
   document.getElementById('pipelineScore').textContent = score % 1 === 0 ? score : score.toFixed(1);
 
-  for (const col of COLUMNS) {
-    const colEl = document.createElement('div');
-    colEl.style.cssText = 'background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 12px; min-height: 240px; display: flex; flex-direction: column; gap: 8px;';
-    colEl.dataset.col = col.id;
+  // Build a reusable function to create a draggable swimlane for any col
+  function buildSwimLane(col, containerEl) {
+    containerEl.dataset.col = col.id;
 
     const header = document.createElement('div');
     header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;';
-    const title = document.createElement('div');
-    title.style.cssText = 'font-size: 13px; font-weight: 500; color: ' + col.color + '; text-transform: uppercase; letter-spacing: 0.5px;';
-    title.textContent = col.title;
-    const count = document.createElement('span');
-    count.style.cssText = 'font-size: 12px; color: var(--color-text-tertiary);';
-    count.textContent = pipelineState[col.id].length;
-    header.appendChild(title); header.appendChild(count);
-    colEl.appendChild(header);
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = 'font-size: 13px; font-weight: 500; color: ' + col.color + '; text-transform: uppercase; letter-spacing: 0.5px;';
+    titleEl.textContent = col.title;
+    const countEl = document.createElement('span');
+    countEl.style.cssText = 'font-size: 12px; color: var(--color-text-tertiary);';
+    countEl.textContent = pipelineState[col.id].length;
+    header.appendChild(titleEl); header.appendChild(countEl);
+    containerEl.appendChild(header);
 
-    for (const card of pipelineState[col.id]) colEl.appendChild(renderCard(card, col.id));
+    for (const card of pipelineState[col.id]) containerEl.appendChild(renderCard(card, col.id));
 
     const addBtn = document.createElement('button');
     addBtn.textContent = '+ Add';
@@ -668,32 +678,31 @@ function renderBoard() {
       renderBoard();
       await saveCard(card);
     });
-    colEl.appendChild(addBtn);
+    containerEl.appendChild(addBtn);
 
-    colEl.addEventListener('dragover', (e) => {
+    containerEl.addEventListener('dragover', (e) => {
       e.preventDefault();
-      colEl.style.background = 'var(--color-background-tertiary)';
-      // Highlight the card we're hovering over
-      colEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
-      const afterEl = getDragAfterElement(colEl, e.clientY);
+      containerEl.style.background = 'var(--color-background-tertiary)';
+      containerEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+      const afterEl = getDragAfterElement(containerEl, e.clientY);
       const indicator = document.createElement('div');
       indicator.className = 'drop-indicator';
       indicator.style.cssText = 'height: 2px; background: var(--color-text-info); border-radius: 2px; margin: 2px 0; pointer-events: none;';
-      if (afterEl) colEl.insertBefore(indicator, afterEl);
-      else colEl.insertBefore(indicator, colEl.querySelector('button:last-child'));
+      if (afterEl) containerEl.insertBefore(indicator, afterEl);
+      else containerEl.insertBefore(indicator, containerEl.querySelector('button:last-child'));
     });
-    colEl.addEventListener('dragleave', (e) => {
-      if (!colEl.contains(e.relatedTarget)) {
-        colEl.style.background = 'var(--color-background-secondary)';
-        colEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+    containerEl.addEventListener('dragleave', (e) => {
+      if (!containerEl.contains(e.relatedTarget)) {
+        containerEl.style.background = col.virtual ? 'var(--color-background-primary)' : 'var(--color-background-secondary)';
+        containerEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
       }
     });
-    colEl.addEventListener('drop', (e) => {
+    containerEl.addEventListener('drop', (e) => {
       e.preventDefault();
-      colEl.style.background = 'var(--color-background-secondary)';
-      colEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+      containerEl.style.background = col.virtual ? 'var(--color-background-primary)' : 'var(--color-background-secondary)';
+      containerEl.querySelectorAll('.drop-indicator').forEach(el => el.remove());
       if (!dragData) return;
-      const afterEl = getDragAfterElement(colEl, e.clientY);
+      const afterEl = getDragAfterElement(containerEl, e.clientY);
       let toIndex;
       if (afterEl) {
         const afterCardId = afterEl.querySelector('[data-card-id]')?.dataset.cardId;
@@ -704,7 +713,43 @@ function renderBoard() {
       }
       moveCard(dragData, col.id, toIndex);
     });
-    board.appendChild(colEl);
+  }
+
+  for (const col of TOP_LEVEL_COLUMNS) {
+    if (col.id === 'meeting') {
+      // Meeting column: outer wrapper holds upcoming + two follow-up sub-lanes
+      const outerEl = document.createElement('div');
+      outerEl.style.cssText = 'background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 12px; display: flex; flex-direction: column; gap: 8px;';
+
+      // Top section — upcoming meetings (reuses meeting col)
+      const upcomingEl = document.createElement('div');
+      upcomingEl.style.cssText = 'display: flex; flex-direction: column; gap: 8px; min-height: 120px;';
+      buildSwimLane(col, upcomingEl);
+      outerEl.appendChild(upcomingEl);
+
+      // Divider
+      const divider = document.createElement('div');
+      divider.style.cssText = 'border-top: 0.5px solid var(--color-border-secondary); margin: 4px 0;';
+      outerEl.appendChild(divider);
+
+      // Bottom section — two sub-lanes side by side
+      const subRow = document.createElement('div');
+      subRow.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 8px;';
+
+      for (const subCol of MEETING_SUB_COLUMNS) {
+        const subEl = document.createElement('div');
+        subEl.style.cssText = 'background: var(--color-background-primary); border-radius: var(--border-radius-md); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 120px; border: 0.5px solid var(--color-border-tertiary);';
+        buildSwimLane(subCol, subEl);
+        subRow.appendChild(subEl);
+      }
+      outerEl.appendChild(subRow);
+      board.appendChild(outerEl);
+    } else {
+      const colEl = document.createElement('div');
+      colEl.style.cssText = 'background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 12px; min-height: 240px; display: flex; flex-direction: column; gap: 8px;';
+      buildSwimLane(col, colEl);
+      board.appendChild(colEl);
+    }
   }
 }
 
