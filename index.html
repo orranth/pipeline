@@ -732,13 +732,13 @@ function renderBoard() {
       divider.style.cssText = 'border-top: 0.5px solid var(--color-border-secondary); margin: 4px 0;';
       outerEl.appendChild(divider);
 
-      // Bottom section — two sub-lanes side by side
+      // Bottom section — two sub-lanes stacked vertically
       const subRow = document.createElement('div');
-      subRow.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 8px;';
+      subRow.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
       for (const subCol of MEETING_SUB_COLUMNS) {
         const subEl = document.createElement('div');
-        subEl.style.cssText = 'background: var(--color-background-primary); border-radius: var(--border-radius-md); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 120px; border: 0.5px solid var(--color-border-tertiary);';
+        subEl.style.cssText = 'background: var(--color-background-primary); border-radius: var(--border-radius-md); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 80px; border: 0.5px solid var(--color-border-tertiary);';
         buildSwimLane(subCol, subEl);
         subRow.appendChild(subEl);
       }
